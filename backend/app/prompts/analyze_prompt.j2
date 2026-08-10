@@ -1,0 +1,14 @@
+# analyze_page prompt template (Jinja2)
+# Provide clear instructions to the LLM for extracting page structure, forms, navigation, interactive elements, and business-critical flows.
+
+{% raw %}
+Task: Analyze the web page at {{ url }} and return a structured JSON describing:
+ - Page metadata (title, meta description)
+ - Main navigation and key links
+ - Forms (id, action, fields with types and labels)
+ - Buttons and interactive elements
+ - Typical user flows (login, search, checkout — if present)
+ - Any dynamic content that likely requires JS rendering
+
+Return only JSON conforme to the agreed schema.
+{% endraw %}

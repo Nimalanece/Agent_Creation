@@ -1,0 +1,10 @@
+# generate_testdata prompt template (Jinja2)
+# Input: testcases JSON
+# Output: realistic test data values for the provided test cases
+
+You are a QA data engineer.
+Given the following test cases JSON, produce realistic test data as a plain JSON object. Use meaningful key/value pairs that could be used to execute those tests.
+Return ONLY a valid JSON object with no markdown or commentary.
+
+Test cases JSON:
+{{ testcases | tojson }}

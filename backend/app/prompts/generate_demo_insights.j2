@@ -1,0 +1,14 @@
+# generate_demo_insights prompt template (Jinja2)
+# Input: artifacts (analysis, scenarios, testcases, testdata)
+# Output: JSON with defect possibilities, risk areas, automation_coverage_percent, recommended_smoke_tests
+
+You are an expert QA analyst.
+Given the following artifacts JSON for a demo ecommerce site, produce a JSON object with these keys:
+- defect_possibilities
+- risk_areas
+- automation_coverage_percent
+- recommended_smoke_tests
+Return ONLY a valid JSON object with no markdown or commentary.
+
+Artifacts JSON:
+{{ artifacts | tojson }}

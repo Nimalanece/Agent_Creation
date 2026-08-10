@@ -1,0 +1,16 @@
+# generate_testcases prompt template (Jinja2)
+# Input: scenarios JSON
+# Output: a comprehensive list of test cases with steps and expected results
+
+You are a QA engineer.
+Given the following scenarios JSON, produce a comprehensive set of test cases.
+Requirements:
+- Generate at least one detailed test case for each scenario.
+- If there are 10+ scenarios, produce 10+ test cases.
+- Cover happy path, negative path, validation, and navigation cases.
+- Return ONLY a valid JSON object with the exact shape:
+{"testcases": [{"id": "t1", "title": "...", "description": "...", "preconditions": [], "steps": [{"action": "...", "selector": "...", "value": "..."}], "expected_result": {}}]}
+Do not include markdown, commentary, or extra text.
+
+Scenarios JSON:
+{{ scenarios | tojson }}

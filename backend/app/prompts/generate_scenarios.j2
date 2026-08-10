@@ -1,0 +1,25 @@
+# generate_scenarios prompt template (Jinja2)
+# Input: analysis JSON (pages, forms, flows)
+# Output: a comprehensive list of high-level test scenarios that cover the main user journeys and validation paths
+
+You are a QA test planner.
+Given the following analysis JSON, produce a comprehensive set of high-level test scenarios for the site.
+Requirements:
+- Generate at least 10 scenarios when the page has sufficient UI elements.
+- Cover the main happy path and important negative/error paths.
+- Include scenarios for page loading, navigation, forms, validation, button/link interactions, and content visibility.
+- If the analysis shows forms, include form access, successful submission, and validation/error scenarios.
+- If the analysis shows inputs, include field presence and invalid data handling.
+- If the analysis shows buttons or links, include primary action and navigation scenarios.
+- Return ONLY a valid JSON object with the exact shape:
+{"scenarios": [{"id": "s1", "module": "Login", "test_scenario_id": "TS_01", "description": "Verify that user is able to login with valid credentials.", "priority": "high", "mapping": {}}]}
+- Base every scenario on the actual page analysis JSON. Do not add scenarios for features, fields, or flows that are not present in the analysis.
+- If the analysis shows no forms, do not generate form submission scenarios or validation scenarios for forms.
+- If the analysis shows no links, do not generate navigation or hyperlink scenarios.
+- If the analysis shows no buttons, do not generate button click scenarios.
+- If the analysis shows no inputs, do not generate input field handling scenarios.
+- Use the page elements and metadata from the analysis to create accurate scenarios tied to the provided URL.
+Do not include markdown, commentary, or extra text.
+
+Analysis JSON:
+{{ analysis | tojson }}
