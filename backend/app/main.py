@@ -1,7 +1,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.api.routes import analyze, scenarios, testcases, testdata, generate_selenium, full_analysis, download_selenium
+from app.api.routes import analyze, scenarios, testcases, full_analysis, testdata, selenium
 
 app = FastAPI(
     title="AI QA Agent - Backend",
@@ -26,10 +26,9 @@ app.add_middleware(
 app.include_router(analyze.router, prefix="/api")
 app.include_router(scenarios.router, prefix="/api")
 app.include_router(testcases.router, prefix="/api")
-app.include_router(testdata.router, prefix="/api")
-app.include_router(generate_selenium.router, prefix="/api")
 app.include_router(full_analysis.router, prefix="/api")
-app.include_router(download_selenium.router, prefix="/api")
+app.include_router(testdata.router, prefix="/api")
+app.include_router(selenium.router, prefix="/api")
 
 
 @app.get("/")

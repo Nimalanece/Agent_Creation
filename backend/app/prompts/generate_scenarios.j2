@@ -11,8 +11,70 @@ Requirements:
 - If the analysis shows forms, include form access, successful submission, and validation/error scenarios.
 - If the analysis shows inputs, include field presence and invalid data handling.
 - If the analysis shows buttons or links, include primary action and navigation scenarios.
+- Every scenario must include a machine-readable test_type string.
+- Generate scenarios from the mapped control's actual field_type, element_type, tag_name, and group metadata. Never treat radio, checkbox, dropdown, or file controls as text inputs.
+- The scenario title, description, test_type, steps, expected_results, mapping, and automation intent must describe one behavior. Before returning each scenario, discard and regenerate any mismatch.
+- For boundary scenarios, steps must probe an explicit minimum or maximum and an out-of-bound value such as maximum + 1, and expected_results must verify acceptance at the boundary and rejection or restriction beyond it. Functional enter-and-display steps alone are invalid for boundary scenarios.
+- For radio single-selection scenarios, select option A, verify A selected, select option B, verify B selected, and verify A deselected. Do not use visibility-only steps for this behavior.
+- Radio mandatory validation is group-level (for example, "Gender selection is mandatory"), never option-level (for example, "Female is mandatory").
+- Radio scenarios must not enter text, verify typed values, verify displayed input values, or validate an individual option as mandatory. Checkbox scenarios must not enter text. Dropdown scenarios must not enter free text.
+- Every scenario must return the same strict JSON contract structure with these keys:
+  scenario_id, title, description, priority, test_type, preconditions, steps, expected_results, field_name, mapping, automation_intent.
+- Preserve existing fields and add the required production fields required for downstream Agent 2/Agent 3 consumption.
+- Infer test_type in a strict finite vocabulary:
+  - "positive" for submit-valid, success, happy path, and valid submission cases.
+  - "negative" for invalid input, negative, error, failure, rejection or submit-invalid cases.
+  - "validation" for required field, blank, empty, mandatory, and validation-driven behavior.
+  - "boundary" for max length, min length, boundary, limit, threshold, or constraint-driven cases.
+  - "functional" for page load, page title, form exists, field exists, element visible, or presence verification.
+  - "navigation" for redirect, routing, or navigation verification.
+  - "security" for XSS, SQL Injection, unauthorized access, authentication, or authorization checks.
+- BUSINESS-LEVEL TEST SCENARIO STEPS:
+  - Steps must be written from a QA tester's perspective, not an automation engineer's perspective
+  - Each step is a clear, action-oriented description that a manual tester can understand
+  - For NAVIGATION scenarios: "Click the [element name] link", "Verify navigation to [target page]"
+  - For FORM scenarios: "Enter [data] into [field name]", "Click the [button name]", "Verify [result message]"
+  - For INPUT scenarios: "Verify [field name] is visible", "Enter [test data] into [field name]", "Verify [field name] accepts the input"
+  - For VALIDATION scenarios: "Attempt to [action]", "Verify [validation message] is displayed"
+  - For BUTTON scenarios: "Click the [button name]", "Verify [expected action] occurs"
+  - Do NOT include: action types, locator information, selectors, automation metadata
+- STEP FORMAT FOR SCENARIOS:
+  - Each step contains ONLY: step_number and description
+  - step_number: Sequence number (1, 2, 3, etc.)
+  - description: Human-readable, business-level action description
+  - Example: {"step_number": 1, "description": "Open the application"}
+  - Example: {"step_number": 2, "description": "Click the Login link"}
+  - Example: {"step_number": 3, "description": "Verify navigation to the Login page"}
+- ELEMENT-SPECIFIC EXPECTED RESULTS WITH EXPLICIT VALUES:
+  - For LINKS: "Link 'Select Menu' is visible and clickable", "User is redirected to '/select-menu'", "URL contains '/select-menu'", "Select Menu page loads successfully"
+  - For BUTTONS: "Button 'Submit' is visible and clickable", "Form submission is triggered", "Success message is displayed"
+  - For TEXT INPUTS: "Field 'First Name' is visible", "Field 'First Name' accepts user input", "Entered value is displayed in 'First Name' field"
+  - For CHECKBOXES: "Checkbox 'Sports' is visible", "Checkbox 'Sports' can be selected", "Checkbox 'Sports' state changes correctly"
+  - For RADIO: "Radio 'Male' is visible", "Radio 'Male' can be selected", "Radio 'Male' selected state is retained"
+  - For DROPDOWNS: "Dropdown 'Country' is visible", "Dropdown 'Country' options are accessible", "Selected option in 'Country' is displayed"
+  - For FILE UPLOADS: "Upload field 'Picture' is visible", "File is accepted by 'Picture' field", "Uploaded filename is displayed"
+  - For FORMS: "Form 'Contact Us' is visible", "All fields in 'Contact Us' are accessible", "Form 'Contact Us' can be submitted"
+- expected_results must be an array of verifiable Selenium assertion strings that are SPECIFIC to each scenario based on test_type AND element type.
+- CRITICAL: Include explicit element names and expected values in every expected result. Use the mapping.label, mapping.field_name, or mapping.text to populate element names.
+- CRITICAL: Do NOT use generic assertions like "Element is visible" or "Field accepts input". Be specific with element names and expected values.
+- CRITICAL: Do NOT use the same expected_results for every scenario. Generate different expected_results per test_type AND element type:
+  * Functional/Page Load: "Page loads successfully", "Browser title matches expected value", "Primary content is visible"
+  * Navigation: "'Select Menu' link is clickable", "User is redirected to '/select-menu'", "URL contains '/select-menu'", "Select Menu page loads successfully"
+  * Input Field: "'First Name' field is visible", "'First Name' field accepts user input", "Entered value is displayed in 'First Name' field"
+  * Link Click: "'Select Menu' link is visible and clickable", "User is redirected", "URL changes to expected destination"
+  * Button Click: "'Submit' button is visible and clickable", "Form submission occurs", "Success message appears"
+  * Positive (Valid): "Form submits successfully", "Success message is displayed", "No validation errors appear"
+  * Negative (Invalid): "Submission is prevented", "Validation error is displayed", "Invalid fields are highlighted"
+  * Validation: "Validation message is displayed with guidance", "User feedback is clear and actionable"
+  * Boundary: "'Max Length' limit is enforced", "System behavior is correct at boundary"
+- preconditions must be a non-empty array of page readiness strings.
+- field_name must be the natural-language name for the mapped input when a field is involved, e.g. "First Name".
+- mapping must include element metadata: element_type, tag_name, selector, field_type, label, placeholder, href, id, name, and any type hints.
 - Return ONLY a valid JSON object with the exact shape:
-{"scenarios": [{"id": "s1", "module": "Login", "test_scenario_id": "TS_01", "description": "Verify that user is able to login with valid credentials.", "priority": "high", "mapping": {}}]}
+{"application_name": "demosite", "scenarios": [{"scenario_id": "TS_05", "title": "Verify 'First Name' field accepts input", "description": "Verify First Name field accepts text input", "priority": "medium", "test_type": "functional", "preconditions": ["Application is available", "Page is loaded successfully"], "steps": [{"step_number": 1, "description": "Verify the First Name field is visible"}, {"step_number": 2, "description": "Enter valid data into the First Name field"}, {"step_number": 3, "description": "Verify the entered value is displayed in the First Name field"}], "expected_results": ["'First Name' field is visible and accessible", "'First Name' field accepts text input", "Entered value is displayed correctly in 'First Name' field"], "field_name": "First Name", "mapping": {"field_name": "First Name", "id": "firstName", "type": "text", "selector": "input#firstName", "element_type": "text_input", "tag_name": "input", "label": "First Name"}}]}
+- Each scenario must include scenario_id, title, description, priority, test_type, preconditions, steps, expected_results, field_name, and mapping.
+- CRITICAL: Steps in scenarios must be business-level descriptions, NOT automation-oriented actions.
+- Detailed automation-ready steps with locator metadata will be generated later by the test case generator from these scenarios.
 - Base every scenario on the actual page analysis JSON. Do not add scenarios for features, fields, or flows that are not present in the analysis.
 - If the analysis shows no forms, do not generate form submission scenarios or validation scenarios for forms.
 - If the analysis shows no links, do not generate navigation or hyperlink scenarios.
@@ -23,3 +85,4 @@ Do not include markdown, commentary, or extra text.
 
 Analysis JSON:
 {{ analysis | tojson }}
+

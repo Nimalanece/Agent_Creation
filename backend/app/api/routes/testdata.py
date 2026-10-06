@@ -1,34 +1,23 @@
-from typing import Any, Dict, Optional
-
 from fastapi import APIRouter, HTTPException
-from pydantic import BaseModel
 
-from app.services.testdata_service import generate_testdata
-from app.core.groq_service import GroqServiceError
+from app.models.schemas import Agent2GenerationRequest, Agent2GenerationResponse
+from app.services.testdata_service import build_test_data_contract
 
 router = APIRouter()
 
+@router.post("/agent2/generate-test-data", response_model=Agent2GenerationResponse)
+async def generate_test_data(payload: Agent2GenerationRequest):
+    """Agent 2 HTTP boundary.
 
-class TestCasesPayload(BaseModel):
-    testcases: Any
-    analysis: Optional[Any] = None
-
-
-@router.post("/testdata", response_model=Dict[str, Any])
-async def testdata_endpoint(payload: TestCasesPayload):
-    """Generate realistic test data for generated test cases using Groq AI.
-
-    Input: { "testcases": [ ... ] }
-    Output: JSON object with test data key/value pairs.
+    Accepts Agent 1 machine-readable JSON and returns a contract that groups data by
+    positive, negative, boundary, and validation production classes.
     """
     try:
-        parsed = await generate_testdata(payload.testcases, analysis=payload.analysis)
-    except GroqServiceError as e:
-        raise HTTPException(status_code=502, detail=str(e))
-    except Exception:
-        raise HTTPException(status_code=500, detail="Internal error generating test data")
+        result = build_test_data_contract(payload)
+        return result
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"Agent 2 failed to generate test data: {exc}")
 
-    if isinstance(parsed, dict):
-        return parsed
-
-    raise HTTPException(status_code=502, detail="Unexpected model output for test data")
+@router.get("/agent2/health")
+async def agent2_health():
+    return {"service": "agent2-test-data", "status": "ok"}

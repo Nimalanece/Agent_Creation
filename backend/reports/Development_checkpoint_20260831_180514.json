@@ -1,0 +1,325 @@
+{
+  "specs": {},
+  "functional_spec_count": {},
+  "testsuites": [
+    {
+      "cases": [
+        {
+          "classname": "app.tests.test_selenium_prompt",
+          "name": "test_selenium_prompt_requires_overlay_safe_clicks",
+          "developer": "-",
+          "test_description": "",
+          "status": "Passed",
+          "logs": "<ul style='list-style-type: none; padding: 0;'></ul>",
+          "details": "",
+          "functional_specifications": [],
+          "categories": []
+        },
+        {
+          "classname": "app.tests.test_selenium_prompt",
+          "name": "test_selenium_prompt_rejects_labels_and_generic_data",
+          "developer": "-",
+          "test_description": "",
+          "status": "Passed",
+          "logs": "<ul style='list-style-type: none; padding: 0;'></ul>",
+          "details": "",
+          "functional_specifications": [],
+          "categories": []
+        },
+        {
+          "classname": "app.tests.test_selenium_prompt",
+          "name": "test_selenium_prompt_enforces_exact_output_contract",
+          "developer": "-",
+          "test_description": "",
+          "status": "Passed",
+          "logs": "<ul style='list-style-type: none; padding: 0;'></ul>",
+          "details": "",
+          "functional_specifications": [],
+          "categories": []
+        },
+        {
+          "classname": "app.tests.test_selenium_prompt",
+          "name": "test_generation_metadata_rejects_label_based_locator_values",
+          "developer": "-",
+          "test_description": "",
+          "status": "Passed",
+          "logs": "<ul style='list-style-type: none; padding: 0;'></ul>",
+          "details": "",
+          "functional_specifications": [],
+          "categories": []
+        },
+        {
+          "classname": "app.tests.test_selenium_prompt",
+          "name": "test_validate_code_extracts_python_from_markdown_and_prose",
+          "developer": "-",
+          "test_description": "",
+          "status": "Passed",
+          "logs": "<ul style='list-style-type: none; padding: 0;'></ul>",
+          "details": "",
+          "functional_specifications": [],
+          "categories": []
+        },
+        {
+          "classname": "app.tests.test_selenium_prompt",
+          "name": "test_validate_code_ignores_trailing_explanation_after_valid_python",
+          "developer": "-",
+          "test_description": "",
+          "status": "Passed",
+          "logs": "<ul style='list-style-type: none; padding: 0;'></ul>",
+          "details": "",
+          "functional_specifications": [],
+          "categories": []
+        },
+        {
+          "classname": "app.tests.test_selenium_prompt",
+          "name": "test_validate_code_rejects_metadata_error_prefix_without_python_parse",
+          "developer": "-",
+          "test_description": "",
+          "status": "Passed",
+          "logs": "<ul style='list-style-type: none; padding: 0;'></ul>",
+          "details": "",
+          "functional_specifications": [],
+          "categories": []
+        },
+        {
+          "classname": "app.tests.test_selenium_prompt",
+          "name": "test_validate_code_rejects_placeholder_identifier_and_locator_string",
+          "developer": "-",
+          "test_description": "",
+          "status": "Passed",
+          "logs": "<ul style='list-style-type: none; padding: 0;'></ul>",
+          "details": "",
+          "functional_specifications": [],
+          "categories": []
+        },
+        {
+          "classname": "app.tests.test_selenium_prompt",
+          "name": "test_validate_code_allows_element_name_bound_to_selenium_locator",
+          "developer": "-",
+          "test_description": "",
+          "status": "Passed",
+          "logs": "<ul style='list-style-type: none; padding: 0;'></ul>",
+          "details": "",
+          "functional_specifications": [],
+          "categories": []
+        },
+        {
+          "classname": "app.tests.test_selenium_prompt",
+          "name": "test_validate_code_rejects_generic_boundary_implementation",
+          "developer": "-",
+          "test_description": "",
+          "status": "Passed",
+          "logs": "<ul style='list-style-type: none; padding: 0;'></ul>",
+          "details": "",
+          "functional_specifications": [],
+          "categories": []
+        },
+        {
+          "classname": "app.tests.test_selenium_prompt",
+          "name": "test_validate_code_accepts_multiple_boundary_probes",
+          "developer": "-",
+          "test_description": "",
+          "status": "Passed",
+          "logs": "<ul style='list-style-type: none; padding: 0;'></ul>",
+          "details": "",
+          "functional_specifications": [],
+          "categories": []
+        },
+        {
+          "classname": "app.tests.test_selenium_prompt",
+          "name": "test_validate_code_rejects_partial_checkbox_flow",
+          "developer": "-",
+          "test_description": "",
+          "status": "Passed",
+          "logs": "<ul style='list-style-type: none; padding: 0;'></ul>",
+          "details": "",
+          "functional_specifications": [],
+          "categories": []
+        },
+        {
+          "classname": "app.tests.test_selenium_prompt",
+          "name": "test_validate_code_accepts_complete_checkbox_flow",
+          "developer": "-",
+          "test_description": "",
+          "status": "Passed",
+          "logs": "<ul style='list-style-type: none; padding: 0;'></ul>",
+          "details": "",
+          "functional_specifications": [],
+          "categories": []
+        },
+        {
+          "classname": "app.tests.test_selenium_prompt",
+          "name": "test_validate_code_counts_radio_action_helper_in_test_flow",
+          "developer": "-",
+          "test_description": "",
+          "status": "Failed",
+          "logs": "<ul style='list-style-type: none; padding: 0;'></ul>",
+          "details": "Message: app.core.gemini_service.GeminiServiceError: Gemini returned code containing placeholder identifiers: ['element']\nDetails: def test_validate_code_counts_radio_action_helper_in_test_flow():\n        test_case = {\n            \"title\": \"Verify Female radio button can be selected\",\n            \"test_type\": \"positive\",\n            \"steps\": [\n                {\"action\": \"select_radio\", \"description\": \"Select radio\"},\n                {\"action\": \"verify\", \"description\": \"Verify selected\"},\n            ],\n            \"expected_results\": [\"Radio selected\"],\n            \"mapping\": {\"field_type\": \"radio\", \"id\": \"gender-female\"},\n        }\n        code = \"from selenium.webdriver.common.by import By\\n\\ndef safe_click(element):\\n    element.click()\\n\\ndef test_radio(driver):\\n    radio = driver.find_element(By.ID, 'gender-female')\\n    safe_click(radio)\\n    assert radio.is_selected()\\n\"\n>       assert GeminiService._validate_code(code, test_case, {}) == code.strip()\n               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n\napp\\tests\\test_selenium_prompt.py:192: \n_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _\n\ncode = \"from selenium.webdriver.common.by import By\\n\\ndef safe_click(element):\\n    element.click()\\n\\ndef test_radio(driver):\\n    radio = driver.find_element(By.ID, 'gender-female')\\n    safe_click(radio)\\n    assert radio.is_selected()\"\ntest_case = {'expected_results': ['Radio selected'], 'mapping': {'field_type': 'radio', 'id': 'gender-female'}, 'steps': [{'action... 'description': 'Select radio'}, {'action': 'verify', 'description': 'Verify selected'}], 'test_type': 'positive', ...}\ntest_data = {}\n\n    @staticmethod\n    def _validate_code(code: str, test_case: Dict[str, Any], test_data: Dict[str, Any]) -> str:\n        raw_code = code\n        if not code:\n            raise GeminiServiceError(\"Gemini returned no Selenium code\")\n    \n        cleaned_code = str(code).strip()\n        if cleaned_code.startswith(\"ERROR:\"):\n            LOGGER.warning(\n                \"Gemini validation result=%s response_type=metadata_error missing_metadata_details=%s\",\n                \"error\",\n                GeminiService._describe_missing_metadata(test_case, test_data),\n            )\n            raise GeminiServiceError(cleaned_code)\n    \n        extracted = GeminiService._extract_python_code(code)\n        LOGGER.warning(\"Gemini extracted python preview (first 2000 chars): %s\", extracted[:2000])\n        code = extracted\n        if not code:\n            raise GeminiServiceError(\"Gemini returned no Selenium code\")\n        lowered = code.lower()\n        health = GeminiService._content_health(code)\n        LOGGER.warning(\n            \"Gemini validation analysis: markdown=%s explanations=%s html=%s invalid_imports=%s incomplete_functions=%s\",\n            health[\"markdown\"],\n            health[\"explanations\"],\n            health[\"html\"],\n            health[\"invalid_imports\"],\n            health[\"incomplete_functions\"],\n        )\n        if any(token in lowered for token in (\"<html\", \"<a \", \"time.sleep(\")):\n            error = \"Gemini returned code containing markup, forbidden waits, or placeholder identifiers\"\n            LOGGER.error(\"Exact validation failure: %s\", error)\n            raise GeminiServiceError(error)\n        try:\n            tree = ast.parse(code)\n        except SyntaxError as exc:\n            syntax_error = f\"Gemini returned syntactically invalid Python: {exc.msg}\"\n            LOGGER.error(\"Exact validation failure: %s\", syntax_error)\n            LOGGER.error(\"Python syntax error: %s\", exc)\n            repaired = GeminiService._repair_malformed_escapes(code)\n            if repaired != code:\n                try:\n                    tree = ast.parse(repaired)\n                    code = repaired\n                except SyntaxError as repaired_exc:\n                    LOGGER.error(\"Python syntax error after repair: %s\", repaired_exc)\n                    raise GeminiServiceError(syntax_error) from exc\n            else:\n                raise GeminiServiceError(syntax_error) from exc\n        placeholders = {\"element\", \"input_field\", \"submit_button\", \"navigation_link\", \"primary_content\"}\n        identifiers = {\n            node.id\n            for node in ast.walk(tree)\n            if isinstance(node, ast.Name)\n        }\n        identifiers.update(\n            node.arg\n            for node in ast.walk(tree)\n            if isinstance(node, ast.arg)\n        )\n        placeholder_identifiers = identifiers & placeholders\n        locator_bound_names = {\n            target.id\n            for node in ast.walk(tree)\n            if isinstance(node, ast.Assign)\n            and isinstance(node.value, ast.Call)\n            and isinstance(node.value.func, ast.Attribute)\n            and node.value.func.attr in {\"find_element\", \"until\"}\n            for target in node.targets\n            if isinstance(target, ast.Name)\n        }\n        # ``element`` is acceptable when it is demonstrably bound to a real\n        # Selenium lookup; an unbound generic placeholder remains invalid.\n        placeholder_identifiers -= placeholder_identifiers & locator_bound_names\n        placeholder_strings = {\n            node.value.strip().lower()\n            for node in ast.walk(tree)\n            if isinstance(node, ast.Constant)\n            and isinstance(node.value, str)\n            and node.value.strip().lower() in placeholders\n        }\n        if placeholder_identifiers or placeholder_strings:\n            offending = sorted(placeholder_identifiers | placeholder_strings)\n            error = f\"Gemini returned code containing placeholder identifiers: {offending}\"\n            LOGGER.error(\n                \"Exact validation failure: %s identifiers=%s strings=%s\",\n                error,\n                sorted(placeholder_identifiers),\n                sorted(placeholder_strings),\n            )\n>           raise GeminiServiceError(error)\nE           app.core.gemini_service.GeminiServiceError: Gemini returned code containing placeholder identifiers: ['element']\n\napp\\core\\gemini_service.py:750: GeminiServiceError",
+          "functional_specifications": [],
+          "categories": []
+        },
+        {
+          "classname": "app.tests.test_selenium_prompt",
+          "name": "test_validate_code_rejects_text_entry_for_radio_scenario",
+          "developer": "-",
+          "test_description": "",
+          "status": "Passed",
+          "logs": "<ul style='list-style-type: none; padding: 0;'></ul>",
+          "details": "",
+          "functional_specifications": [],
+          "categories": []
+        },
+        {
+          "classname": "app.tests.test_selenium_prompt",
+          "name": "test_validate_code_accepts_radio_checked_state_assertion",
+          "developer": "-",
+          "test_description": "",
+          "status": "Passed",
+          "logs": "<ul style='list-style-type: none; padding: 0;'></ul>",
+          "details": "",
+          "functional_specifications": [],
+          "categories": []
+        },
+        {
+          "classname": "app.tests.test_selenium_prompt",
+          "name": "test_describe_missing_metadata_extracts_fields_from_error_text",
+          "developer": "-",
+          "test_description": "",
+          "status": "Passed",
+          "logs": "<ul style='list-style-type: none; padding: 0;'></ul>",
+          "details": "",
+          "functional_specifications": [],
+          "categories": []
+        },
+        {
+          "classname": "app.tests.test_selenium_prompt",
+          "name": "test_validate_code_repairs_windows_path_escapes_in_generated_python",
+          "developer": "-",
+          "test_description": "",
+          "status": "Passed",
+          "logs": "<ul style='list-style-type: none; padding: 0;'></ul>",
+          "details": "",
+          "functional_specifications": [],
+          "categories": []
+        },
+        {
+          "classname": "app.tests.test_selenium_prompt",
+          "name": "test_generation_metadata_validation_requires_real_locators_and_data",
+          "developer": "-",
+          "test_description": "",
+          "status": "Passed",
+          "logs": "<ul style='list-style-type: none; padding: 0;'></ul>",
+          "details": "",
+          "functional_specifications": [],
+          "categories": []
+        },
+        {
+          "classname": "app.tests.test_selenium_prompt",
+          "name": "test_agent2_category_generated_data_is_preserved_for_agent3_prompt",
+          "developer": "-",
+          "test_description": "",
+          "status": "Passed",
+          "logs": "<ul style='list-style-type: none; padding: 0;'></ul>",
+          "details": "",
+          "functional_specifications": [],
+          "categories": []
+        },
+        {
+          "classname": "app.tests.test_selenium_prompt",
+          "name": "test_generation_metadata_allows_resolved_navigation_url_without_data",
+          "developer": "-",
+          "test_description": "",
+          "status": "Passed",
+          "logs": "<ul style='list-style-type: none; padding: 0;'></ul>",
+          "details": "",
+          "functional_specifications": [],
+          "categories": []
+        },
+        {
+          "classname": "app.tests.test_selenium_prompt",
+          "name": "test_generation_metadata_allows_page_title_assertion_without_dom_locator",
+          "developer": "-",
+          "test_description": "",
+          "status": "Passed",
+          "logs": "<ul style='list-style-type: none; padding: 0;'></ul>",
+          "details": "",
+          "functional_specifications": [],
+          "categories": []
+        },
+        {
+          "classname": "app.tests.test_selenium_prompt",
+          "name": "test_generation_metadata_allows_verified_dom_id_matching_label",
+          "developer": "-",
+          "test_description": "",
+          "status": "Passed",
+          "logs": "<ul style='list-style-type: none; padding: 0;'></ul>",
+          "details": "",
+          "functional_specifications": [],
+          "categories": []
+        },
+        {
+          "classname": "app.tests.test_selenium_prompt",
+          "name": "test_generation_metadata_accepts_common_agent1_action_aliases",
+          "developer": "-",
+          "test_description": "",
+          "status": "Passed",
+          "logs": "<ul style='list-style-type: none; padding: 0;'></ul>",
+          "details": "",
+          "functional_specifications": [],
+          "categories": []
+        },
+        {
+          "classname": "app.tests.test_selenium_prompt",
+          "name": "test_generation_metadata_prefers_normalized_steps_over_raw_label_steps",
+          "developer": "-",
+          "test_description": "",
+          "status": "Passed",
+          "logs": "<ul style='list-style-type: none; padding: 0;'></ul>",
+          "details": "",
+          "functional_specifications": [],
+          "categories": []
+        },
+        {
+          "classname": "app.tests.test_selenium_prompt",
+          "name": "test_gemini_accepts_aq_prefixed_google_key_for_query_auth",
+          "developer": "-",
+          "test_description": "",
+          "status": "Passed",
+          "logs": "<ul style='list-style-type: none; padding: 0;'></ul>",
+          "details": "",
+          "functional_specifications": [],
+          "categories": []
+        },
+        {
+          "classname": "app.tests.test_selenium_prompt",
+          "name": "test_gemini_uses_query_key_without_bearer_header",
+          "developer": "-",
+          "test_description": "",
+          "status": "Passed",
+          "logs": "<ul style='list-style-type: none; padding: 0;'></ul>",
+          "details": "",
+          "functional_specifications": [],
+          "categories": []
+        },
+        {
+          "classname": "app.tests.test_selenium_prompt",
+          "name": "test_navigation_scenario_does_not_require_missing_agent2_data",
+          "developer": "-",
+          "test_description": "",
+          "status": "Passed",
+          "logs": "<ul style='list-style-type: none; padding: 0;'></ul>",
+          "details": "",
+          "functional_specifications": [],
+          "categories": []
+        }
+      ]
+    }
+  ],
+  "test_environment": "Development",
+  "timestamp": "31 Aug 2026, 18:05",
+  "img_url": "https://icon.icepanel.io/Technology/svg/pytest.svg",
+  "test_status": "complete",
+  "report_title": "pytest HTML Report",
+  "category_count": {},
+  "all_categories": []
+}

@@ -16,10 +16,15 @@ try:
 except Exception:
     _HAS_GROQ_SDK = False
 
-load_dotenv()
+ENV_FILE = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", ".env"))
+load_dotenv(dotenv_path=ENV_FILE, override=False)
 
 VERIFY_SSL = os.getenv("DISABLE_SSL_VERIFICATION", "false").lower() not in ("1", "true", "yes")
 MOCK_MODE = os.getenv("GROQ_MOCK_MODE", "false").lower() in ("1", "true", "yes")
+DEFAULT_GROQ_API_URL = "https://api.groq.com/openai/v1/chat/completions"
+DEFAULT_GROQ_MODEL = "llama-3.1-8b-instant"
+DEFAULT_OLLAMA_API_URL = "http://127.0.0.1:11434/api/chat"
+DEFAULT_OLLAMA_MODEL = "llama3.2"
 
 LOGGER = logging.getLogger(__name__)
 logging.basicConfig(level=logging.INFO)
@@ -53,14 +58,20 @@ class GroqService:
         api_url: Optional[str] = None,
         model: Optional[str] = None,
         timeout: Optional[int] = None,
+        provider: Optional[str] = None,
     ):
         self.api_key = (api_key or os.getenv("GROQ_API_KEY") or "").strip()
-        self.api_url = (api_url or os.getenv("GROQ_API_URL") or "").strip()
-        self.model = (model or os.getenv("GROQ_MODEL") or "").strip()
+        self.provider = (provider or os.getenv("AI_PROVIDER") or "groq").strip().lower()
+        if self.provider == "ollama":
+            self.api_url = (api_url or os.getenv("OLLAMA_API_URL") or DEFAULT_OLLAMA_API_URL).strip()
+            self.model = (model or os.getenv("OLLAMA_MODEL") or DEFAULT_OLLAMA_MODEL).strip()
+        else:
+            self.api_url = (api_url or os.getenv("GROQ_API_URL") or DEFAULT_GROQ_API_URL).strip()
+            self.model = (model or os.getenv("GROQ_MODEL") or DEFAULT_GROQ_MODEL).strip()
         self.timeout = timeout or int(os.getenv("GROQ_TIMEOUT_SECONDS", "30"))
         self.mock_mode = MOCK_MODE
 
-        if not self.api_key:
+        if self.provider != "ollama" and not self.api_key:
             LOGGER.warning("GROQ_API_KEY not set; calls will fail until configured")
 
         # Initialize SDK client if available
@@ -205,6 +216,9 @@ class GroqService:
             LOGGER.info("Using mock Groq responses")
             return self._mock_response_for_prompt(prompt)
 
+        if self.provider == "ollama":
+            return await self._call_ollama(prompt)
+
         if _HAS_GROQ_SDK and self._client is not None:
             try:
                 # Example SDK usage — adapt to real SDK API
@@ -219,6 +233,11 @@ class GroqService:
         # HTTP fallback
         if not self.api_url:
             raise GroqServiceError("No GROQ_API_URL configured for HTTP fallback")
+        if not self.api_key:
+            raise GroqServiceError(
+                "GROQ_API_KEY is not configured. Set GROQ_API_KEY in backend/.env "
+                "or enable GROQ_MOCK_MODE=true for local development."
+            )
 
         headers = {
             "Authorization": f"Bearer {self.api_key}" if self.api_key else "",
@@ -258,7 +277,17 @@ class GroqService:
                         await asyncio.sleep(wait_seconds)
                         continue
                     LOGGER.exception("HTTP call to Groq API failed: %s", e)
-                    raise GroqServiceError("HTTP call to Groq API failed") from e
+                    detail = e.response.text[:500].strip() if e.response is not None else str(e)
+                    status = e.response.status_code if e.response is not None else "unknown"
+                    if "internet security" in detail.lower() or "<html" in detail.lower():
+                        detail = (
+                            "A network security gateway blocked the Groq request. "
+                            "Allow https://api.groq.com through the firewall/proxy, "
+                            "or use GROQ_MOCK_MODE=true for local development."
+                        )
+                    raise GroqServiceError(
+                        f"Groq API returned HTTP {status}: {detail}"
+                    ) from e
                 except httpx.HTTPError as e:
                     last_error = e
                     if attempt < 2:
@@ -267,12 +296,37 @@ class GroqService:
                         await asyncio.sleep(wait_seconds)
                         continue
                     LOGGER.exception("HTTP call to Groq API failed: %s", e)
-                    raise GroqServiceError("HTTP call to Groq API failed") from e
+                    raise GroqServiceError(f"Groq HTTP request failed: {e}") from e
 
             if last_error is not None:
-                raise GroqServiceError("HTTP call to Groq API failed") from last_error
+                raise GroqServiceError(f"Groq HTTP request failed: {last_error}") from last_error
 
-            raise GroqServiceError("HTTP call to Groq API failed")
+            raise GroqServiceError("Groq HTTP request failed")
+
+    async def _call_ollama(self, prompt: str) -> Dict[str, Any]:
+        payload = {
+            "model": self.model,
+            "messages": [{"role": "user", "content": prompt}],
+            "stream": False,
+            "options": {"temperature": 0.2},
+        }
+        try:
+            async with httpx.AsyncClient(timeout=self.timeout, trust_env=False) as client:
+                response = await client.post(
+                    self.api_url,
+                    json=payload,
+                    headers={"Content-Type": "application/json"},
+                )
+                response.raise_for_status()
+                return response.json()
+        except httpx.HTTPStatusError as exc:
+            status = exc.response.status_code if exc.response is not None else "unknown"
+            detail = exc.response.text[:500].strip() if exc.response is not None else str(exc)
+            raise GroqServiceError(f"Ollama API returned HTTP {status}: {detail}") from exc
+        except httpx.HTTPError as exc:
+            raise GroqServiceError(
+                f"Cannot connect to Ollama at {self.api_url}. Start Ollama and run: ollama pull {self.model}"
+            ) from exc
 
     def _parse_json_output(self, raw_text: str) -> Any:
         """Try to extract JSON from a model response string.
@@ -312,6 +366,10 @@ class GroqService:
 
         if not isinstance(raw, dict):
             return None
+
+        ollama_message = raw.get("message")
+        if isinstance(ollama_message, dict) and isinstance(ollama_message.get("content"), str):
+            return ollama_message["content"]
 
         # OpenAI/Groq chat-completions format
         choices = raw.get("choices")
@@ -400,21 +458,21 @@ class GroqService:
         parsed = await self._render_and_call("generate_testcases.j2", context)
         return parsed
 
-    async def generate_testdata(self, testcases: Dict[str, Any]) -> Dict[str, Any]:
-        """Synthesize structured test data for the provided test cases.
-        """
-        context = {"testcases": testcases}
-        parsed = await self._render_and_call("generate_testdata.j2", context)
-        return parsed
-
-    async def generate_selenium_code(self, artifacts: Dict[str, Any]) -> Dict[str, Any]:
-        """Generate Selenium Python code bundle from artifacts (scenarios, testcases, testdata).
- 
-        Returns a dict describing files and metadata, e.g. {"files": {"tests/test_login.py": "..."}, "metadata": {...}}
-        """
-        context = {"artifacts": artifacts}
-        parsed = await self._render_and_call("generate_selenium.j2", context, allow_raw_text=True)
-        return parsed
+    async def generate_selenium_code(
+        self,
+        test_case: Dict[str, Any],
+        test_data: Dict[str, Any],
+    ) -> str:
+        """Generate raw executable pytest Selenium code from upstream outputs."""
+        context = {"test_case": test_case, "test_data": test_data}
+        generated = await self._render_and_call(
+            "generate_selenium.j2",
+            context,
+            allow_raw_text=True,
+        )
+        if isinstance(generated, str):
+            return generated.strip()
+        raise GroqServiceError("Selenium generator returned a non-code response")
 
     async def generate_demo_insights(self, artifacts: Dict[str, Any]) -> Dict[str, Any]:
         """Generate demo-mode insights for well-known demo sites (e.g., saucedemo.com).

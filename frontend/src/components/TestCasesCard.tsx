@@ -59,6 +59,12 @@ const TestCasesCard: React.FC<Props> = ({ testcases }) => {
     setExpanded((prev) => ({ ...prev, [id]: !prev[id] }));
   }
 
+  const formatKey = (k: string) => {
+    // convert snake_case or camelCase to Title Case for labels
+    const spaced = k.replace(/([a-z0-9])([A-Z])/g, '$1 $2').replace(/[_-]/g, ' ');
+    return spaced.replace(/\w\S*/g, (txt) => txt.charAt(0).toUpperCase() + txt.substr(1));
+  };
+
   return (
     <div className="bg-white shadow rounded-lg p-4">
       <div className="flex flex-col gap-3 sm:flex-row sm:justify-between sm:items-center">
@@ -86,7 +92,7 @@ const TestCasesCard: React.FC<Props> = ({ testcases }) => {
           <select
             value={pageSize}
             onChange={(e) => { setPageSize(Number(e.target.value)); setPage(1); }}
-            className="border rounded px-2 py-1 text-sm"
+            className="rounded-lg border border-slate-600/70 bg-slate-950/70 px-2 py-1 text-sm text-slate-200 outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-500/20"
             disabled={showAll}
           >
             {PAGE_SIZES.map((s) => (
@@ -101,56 +107,129 @@ const TestCasesCard: React.FC<Props> = ({ testcases }) => {
       ) : (
         <>
           <div className="mt-3 space-y-3">
-            {pageItems.map((t) => (
-              <div key={t.id} className="border rounded p-3">
-                <div className="flex justify-between items-start gap-4">
-                  <div>
-                    <h3 className="text-sm font-semibold">{t.title}</h3>
-                    {t.description && <p className="text-xs text-gray-500">{t.description}</p>}
-                  </div>
-                  <div className="flex items-start gap-3">
-                    <span className="text-xs bg-gray-100 px-2 py-1 rounded">{(t as any).priority || "—"}</span>
-                    <button
-                      onClick={() => toggleExpand(t.id)}
-                      className="text-xs text-blue-600 hover:underline"
-                    >
-                      {expanded[t.id] ? "Collapse" : "Details"}
-                    </button>
-                  </div>
-                </div>
+            {pageItems.map((t) => {
+              const id = t.id || t.test_case_id || t.scenario_id || t.title;
+              const expandedKey = String(id);
+              const expectedResults = t.expected_results?.length ? t.expected_results : (t.expected_result ? [typeof t.expected_result === 'string' ? t.expected_result : JSON.stringify(t.expected_result)] : []);
 
-                {expanded[t.id] ? (
-                  <div className="mt-2 text-sm text-gray-600">
-                    {t.preconditions && t.preconditions.length > 0 && (
-                      <div>
-                        <h4 className="text-xs font-medium">Preconditions</h4>
-                        <ul className="text-sm text-gray-600 list-disc ml-5">
-                          {t.preconditions.map((p, idx) => (
-                            <li key={idx}>{p}</li>
-                          ))}
-                        </ul>
+              return (
+                <div key={expandedKey} className="border rounded p-3">
+                  <div className="flex justify-between items-start gap-4">
+                    <div>
+                      <h3 className="text-sm font-semibold">{t.title}</h3>
+                      {t.description && <p className="text-xs text-gray-500">{t.description}</p>}
+                      <div className="mt-1 flex flex-wrap gap-2 text-[11px] text-gray-500">
+                        {t.test_type && <span className="bg-gray-50 px-2 py-1 rounded">{t.test_type}</span>}
+                        {t.scenario_id && <span className="bg-gray-50 px-2 py-1 rounded">Scenario: {t.scenario_id}</span>}
+                        {t.feature_id && <span className="bg-gray-50 px-2 py-1 rounded">Feature: {t.feature_id}</span>}
                       </div>
-                    )}
-
-                    <div className="mt-2">
-                      <h4 className="text-xs font-medium">Steps</h4>
-                      <ol className="text-sm text-gray-600 list-decimal ml-5">
-                        {t.steps.map((s, idx) => (
-                          <li key={idx}>{JSON.stringify(s)}</li>
-                        ))}
-                      </ol>
                     </div>
-
-                    {t.expected_result && (
-                      <div className="mt-2">
-                        <h4 className="text-xs font-medium">Expected</h4>
-                        <p className="text-sm text-gray-600">{JSON.stringify(t.expected_result)}</p>
-                      </div>
-                    )}
+                    <div className="flex items-start gap-3">
+                      <span className="text-xs bg-gray-100 px-2 py-1 rounded">{(t as any).priority || "—"}</span>
+                      <button
+                        onClick={() => toggleExpand(expandedKey)}
+                        className="text-xs text-blue-600 hover:underline"
+                      >
+                        {expanded[expandedKey] ? "Collapse" : "Details"}
+                      </button>
+                    </div>
                   </div>
-                ) : null}
-              </div>
-            ))}
+
+                  {expanded[expandedKey] ? (
+                    <div className="mt-2 text-sm text-gray-600">
+                      {t.preconditions && t.preconditions.length > 0 && (
+                        <div>
+                          <h4 className="text-xs font-medium">Preconditions</h4>
+                          <ul className="text-sm text-gray-600 list-disc ml-5">
+                            {t.preconditions.map((p, idx) => (
+                              <li key={idx}>{p}</li>
+                            ))}
+                          </ul>
+                        </div>
+                      )}
+
+                      <div className="mt-2">
+                        <h4 className="text-xs font-medium">Steps</h4>
+                        <div className="mt-2 max-h-64 md:max-h-96 overflow-y-auto overflow-x-hidden pr-2 space-y-3">
+                          {t.steps.map((stepObj: any, idx: number) => {
+                            const stepNumber = stepObj.step_number ?? (idx + 1);
+                            const keys = Object.keys(stepObj).filter((k) => k !== 'step_number');
+                            return (
+                              <div key={idx} className="bg-white border rounded-lg p-3 shadow-sm">
+                                <div className="flex justify-between items-center">
+                                  <div className="text-sm font-semibold">Step {stepNumber}</div>
+                                  <div className="text-xs text-gray-500">{stepObj.action || ''}</div>
+                                </div>
+                                <div className="mt-2 grid grid-cols-1 sm:grid-cols-2 gap-2 text-sm text-gray-700">
+                                  {keys.map((key) => (
+                                    <div key={key} className="break-words">
+                                      <div className="text-xs text-gray-500">{formatKey(key)}:</div>
+                                      <div className="whitespace-pre-wrap break-words text-sm text-gray-800">{String(stepObj[key] ?? '')}</div>
+                                    </div>
+                                  ))}
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+
+                      {t.input_fields && t.input_fields.length > 0 && (
+                        <div className="mt-2">
+                          <h4 className="text-xs font-medium">Input Fields</h4>
+                          <p className="text-sm text-gray-600">{t.input_fields.join(", ")}</p>
+                        </div>
+                      )}
+
+                      {t.required_data && t.required_data.length > 0 && (
+                        <div className="mt-2">
+                          <h4 className="text-xs font-medium">Required Data</h4>
+                          <div className="space-y-2">
+                            {t.required_data.map((rd, idx) => (
+                              <div key={idx} className="bg-gray-50 border rounded p-2">
+                                <div className="font-medium text-gray-800">{rd.field_name}</div>
+                                <div className="text-xs text-gray-600">Type: {rd.field_type} | Format: {rd.expected_format}</div>
+                                <div className="text-xs text-gray-600">Purpose: {rd.business_purpose}</div>
+                                <div className="text-xs text-gray-600">Rules: {rd.validation_rules.join(", ")}</div>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+
+                      {t.automation_hints && (
+                        <div className="mt-2">
+                          <h4 className="text-xs font-medium">Automation Hints</h4>
+                          <div className="bg-gray-50 border rounded p-2 text-xs">
+                            <div><span className="font-medium">Page:</span> {t.automation_hints.page_name}</div>
+                            <div><span className="font-medium">Actions:</span> {t.automation_hints.actions.join(", ") || "—"}</div>
+                            <div><span className="font-medium">Assertions:</span> {t.automation_hints.assertions.join(", ") || "—"}</div>
+                          </div>
+                        </div>
+                      )}
+
+                      {expectedResults.length > 0 && (
+                        <div className="mt-2">
+                          <h4 className="text-xs font-medium">Expected Results</h4>
+                          <ul className="text-sm text-gray-600 list-disc ml-5">
+                            {expectedResults.map((er, idx) => (
+                              <li key={idx}>{er}</li>
+                            ))}
+                          </ul>
+                        </div>
+                      )}
+
+                      {t.mapping && Object.keys(t.mapping).length > 0 && (
+                        <div className="mt-2">
+                          <h4 className="text-xs font-medium">Mapping</h4>
+                          <pre className="text-xs bg-gray-50 border rounded p-2 overflow-x-auto">{JSON.stringify(t.mapping, null, 2)}</pre>
+                        </div>
+                      )}
+                    </div>
+                  ) : null}
+                </div>
+              );
+            })}
           </div>
 
           {!showAll && (
@@ -193,7 +272,7 @@ const TestCasesCard: React.FC<Props> = ({ testcases }) => {
                     max={totalPages}
                     value={seekPage}
                     onChange={(e) => setSeekPage(Number(e.target.value))}
-                    className="w-20 border rounded px-2 py-1 text-sm"
+                    className="w-20 rounded-lg border border-slate-600/70 bg-slate-950/70 px-2 py-1 text-sm text-slate-200 outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-500/20"
                   />
                   <button
                     onClick={handleJump}

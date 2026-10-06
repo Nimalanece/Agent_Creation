@@ -1,10 +1,12 @@
 import asyncio
 import glob
+import html
+import ipaddress
 import logging
 import os
+import re
 import shutil
 import socket
-import re
 from datetime import datetime
 from typing import Any, Dict, List, Optional, Set
 from urllib.parse import urlparse
@@ -65,69 +67,119 @@ class URLAnalysisError(Exception):
     pass
 
 
-def _is_valid_url(url: str) -> bool:
-    """Basic validation that URL has http/https scheme and a hostname."""
+INVALID_PUBLIC_URL_MESSAGE = "Invalid URL. Please provide a valid public website URL."
+PRIVATE_HOST_MESSAGE = "Private or loopback hosts are not supported."
+
+
+def validate_url(url: str) -> bool:
+    """Return whether a sanitized URL is a well-formed public-web URL shape."""
     if not isinstance(url, str):
         return False
-    if any(token in url for token in ("<", ">", "href=", "</a>", "&quot;")):
+    if not url or url != url.strip() or any(char.isspace() for char in url):
+        return False
+    if any(token in url.casefold() for token in ("<a", "</a", "href=", "target=", "rel=", "title=")):
         return False
     try:
         parsed = urlparse(url)
-        if parsed.scheme not in ("http", "https"):
+        if parsed.scheme not in ("http", "https") or not parsed.netloc:
             return False
         if not parsed.hostname:
+            return False
+        if parsed.port is not None and not 1 <= parsed.port <= 65535:
             return False
         return True
     except Exception:
         return False
 
 
-def _extract_raw_url_from_input(raw_url: Optional[str]) -> str:
-    if not isinstance(raw_url, str) or not raw_url.strip():
-        return ""
-    text = raw_url.strip()
+def _is_valid_url(url: str) -> bool:
+    """Backward-compatible alias for URL validation."""
+    return validate_url(url)
 
-    # Prefer explicit href values from anchor tags.
-    href_match = re.search(r'href\s*=\s*["\']([^"\']+)["\']', text, re.IGNORECASE)
+
+def sanitize_url(raw_input: Optional[str]) -> str:
+    """Extract and normalize a plain HTTP(S) URL from user input."""
+    if not isinstance(raw_input, str) or not raw_input.strip():
+        return ""
+    text = html.unescape(raw_input).strip()
+
+    href_match = re.search(
+        r"href\s*=\s*(?:[\"']([^\"']+)[\"']|([^\s>]+))",
+        text,
+        re.IGNORECASE,
+    )
     if href_match:
-        text = href_match.group(1).strip()
+        text = next((group for group in href_match.groups() if group), "").strip()
     else:
-        # Remove HTML tags completely and then find the first raw URL.
-        text = re.sub(r'<[^>]+>', '', text)
-        url_match = re.search(r'https?://[^\s<>"\']+', text)
+        text_without_tags = re.sub(r"<[^>]*>", " ", text)
+        url_match = re.search(r"https?://[^\s<>\"']+", text_without_tags, re.IGNORECASE)
         if url_match:
             text = url_match.group(0).strip()
 
-    # If the URL is still wrapped or suffixed by HTML fragments, trim at the first disallowed character.
-    text = re.split(r'[<>"\s]', text)[0].strip()
+    text = html.unescape(text).strip().strip("\"'")
+    text = re.split(r"[<>\s\"']", text, maxsplit=1)[0].strip().rstrip(";")
 
-    if not _is_valid_url(text):
+    if not validate_url(text):
         return ""
 
-    # Normalize and remove fragments.
     parsed = urlparse(text)
     cleaned = parsed._replace(fragment="")
     return cleaned.geturl()
 
 
-def _is_private_host(hostname: str) -> bool:
-    """Resolve hostname to IP and check for private ranges (naive check).
+def _extract_raw_url_from_input(raw_url: Optional[str]) -> str:
+    """Backward-compatible alias for URL sanitization."""
+    return sanitize_url(raw_url)
 
-    This is a best-effort prevention for SSRF. It is NOT a replacement for a full
-    allowlist/blocklist implemented in infra.
-    """
+
+def validate_host(hostname: str) -> bool:
+    """Return whether a hostname resolves only to public addresses."""
+    if not hostname:
+        return False
+    normalized = hostname.rstrip(".").casefold()
+    if normalized == "localhost" or normalized.endswith(".localhost"):
+        return False
+
+    addresses = []
     try:
-        # Resolve to first IPv4 address
-        ip = socket.gethostbyname(hostname)
-        # Simple checks for common private ranges
-        private_prefixes = ("10.", "172.", "192.168.", "127.")
-        for p in private_prefixes:
-            if ip.startswith(p):
-                return True
-        return False
-    except Exception:
-        # If resolution fails, be conservative and treat as non-private
-        return False
+        addresses = [result[4][0] for result in socket.getaddrinfo(normalized, None)]
+    except (OSError, socket.gaierror):
+        try:
+            addresses = [socket.gethostbyname(normalized)]
+        except (OSError, socket.gaierror):
+            return False
+
+    for address in set(addresses):
+        try:
+            parsed_address = ipaddress.ip_address(address)
+        except ValueError:
+            return False
+        if (
+            parsed_address.is_loopback
+            or parsed_address.is_private
+            or parsed_address.is_link_local
+            or parsed_address.is_unspecified
+            or parsed_address.is_reserved
+            or parsed_address.is_multicast
+        ):
+            return False
+    return True
+
+
+def _is_private_host(hostname: str) -> bool:
+    """Backward-compatible inverse of :func:`validate_host`.
+
+    This remains an SSRF boundary and is evaluated only after URL sanitization.
+    """
+    return not validate_host(hostname)
+
+
+def _fetch_error_message(exc: Optional[Exception]) -> str:
+    """Return a useful network error even when an exception has no message."""
+    if exc is None:
+        return "unknown network error"
+    message = str(exc).strip()
+    return message or repr(exc)
 
 
 def _element_selector(tag) -> str:
@@ -190,6 +242,35 @@ def _get_label_for_element(element: Any, labels: Dict[str, str]) -> str:
     return ""
 
 
+def _is_react_select_input(element: Any) -> bool:
+    element_id = str(element.get("id") or "").strip().lower()
+    element_name = str(element.get("name") or "").strip().lower()
+    return bool(re.fullmatch(r"react-select-\d+-input", element_id) or re.fullmatch(r"react-select-\d+-input", element_name))
+
+
+def _react_select_label(element: Any, labels: Dict[str, str]) -> str:
+    labelled_by = str(element.get("aria-labelledby") or "").strip()
+    if labelled_by:
+        label_parts = []
+        for label_id in labelled_by.split():
+            label = element.find_parent().find(id=label_id) if element.find_parent() else None
+            if label:
+                label_parts.append(label.get_text(" ", strip=True))
+        if label_parts:
+            return " ".join(label_parts)
+
+    aria_label = str(element.get("aria-label") or "").strip()
+    if aria_label:
+        return aria_label
+
+    # React-Select renders an input without a name/label-for association. Its
+    # nearest preceding label is the business field label (for example State).
+    previous_label = element.find_previous("label")
+    if previous_label:
+        return previous_label.get_text(" ", strip=True)
+    return ""
+
+
 def _extract_buttons(soup: BeautifulSoup) -> List[Dict[str, Any]]:
     results: List[Dict[str, Any]] = []
 
@@ -247,13 +328,19 @@ def _extract_inputs(soup: BeautifulSoup, labels: Optional[Dict[str, str]] = None
     results: List[Dict[str, Any]] = []
     inputs = soup.find_all("input")
     for inp in inputs:
+        if str(inp.get("type") or "text").lower() == "hidden":
+            continue
+        is_react_select = _is_react_select_input(inp)
+        react_label = _react_select_label(inp, labels or {}) if is_react_select else ""
+        if is_react_select and not react_label and not inp.get("name") and not inp.get("placeholder"):
+            continue
         results.append(
             {
                 "tag": inp.name,
-                "type": inp.get("type", "text"),
-                "name": inp.get("name"),
-                "id": inp.get("id"),
-                "label": _get_label_for_element(inp, labels or {}),
+                "type": "select" if is_react_select else inp.get("type", "text"),
+                "name": inp.get("name") or react_label,
+                "id": None if is_react_select else inp.get("id"),
+                "label": react_label or _get_label_for_element(inp, labels or {}),
                 "placeholder": inp.get("placeholder"),
                 "required": inp.has_attr("required"),
                 "classes": inp.get("class", []),
@@ -422,6 +509,63 @@ def _find_local_driver_path(browser: str) -> Optional[str]:
     return None
 
 
+def _find_browser_binary(browser: str) -> Optional[str]:
+    candidates: List[str] = []
+    if browser == "chrome":
+        candidates.extend([
+            os.getenv("CHROME_BIN", ""),
+            os.getenv("GOOGLE_CHROME_BIN", ""),
+            os.getenv("CHROMIUM_BIN", ""),
+            r"C:\Program Files\Google\Chrome\Application\chrome.exe",
+            r"C:\Program Files (x86)\Google\Chrome\Application\chrome.exe",
+            os.path.join(os.path.expanduser("~"), "AppData", "Local", "Google", "Chrome", "Application", "chrome.exe"),
+            os.path.join(os.path.expanduser("~"), "AppData", "Local", "Chromium", "Application", "chrome.exe"),
+        ])
+        candidates.extend(
+            [
+                shutil.which("google-chrome"),
+                shutil.which("google-chrome-stable"),
+                shutil.which("chrome"),
+                shutil.which("chromium"),
+                shutil.which("chromium-browser"),
+            ]
+        )
+    elif browser == "edge":
+        candidates.extend([
+            os.getenv("EDGE_BIN", ""),
+            os.getenv("MSEdge_BIN", ""),
+            r"C:\Program Files\Microsoft\Edge\Application\msedge.exe",
+            r"C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe",
+            os.path.join(os.path.expanduser("~"), "AppData", "Local", "Microsoft", "Edge", "Application", "msedge.exe"),
+        ])
+        candidates.extend(
+            [
+                shutil.which("msedge"),
+                shutil.which("microsoft-edge"),
+                shutil.which("microsoft-edge-beta"),
+                shutil.which("edge"),
+            ]
+        )
+
+    for path in candidates:
+        if not path:
+            continue
+        normalized = path.strip().strip('"')
+        if os.path.exists(normalized):
+            return normalized
+    return None
+
+
+def _preferred_browser() -> str:
+    chrome_bin = _find_browser_binary("chrome")
+    edge_bin = _find_browser_binary("edge")
+    if chrome_bin:
+        return "chrome"
+    if edge_bin:
+        return "edge"
+    return "chrome"
+
+
 def _render_page_html(url: str, timeout: int = DEFAULT_TIMEOUT) -> str:
     if not _SELENIUM_AVAILABLE or webdriver is None or ChromeOptions is None or EdgeOptions is None or ChromeService is None or EdgeService is None or WebDriverWait is None or EC is None or ChromeDriverManager is None:
         raise URLAnalysisError("Selenium is not installed or unavailable for JS rendering")
@@ -439,59 +583,69 @@ def _render_page_html(url: str, timeout: int = DEFAULT_TIMEOUT) -> str:
             or os.getenv("EDGEDRIVER_PATH", "")
         ).strip().strip('"')
         service = None
-        used_browser = "chrome"
+        used_browser = _preferred_browser()
+
+        chrome_browser = _find_browser_binary("chrome")
+        edge_browser = _find_browser_binary("edge")
+
+        # Chrome is installed here, so stale Edge drivers must not be used.
+        if chrome_browser:
+            edgedriver_path = ""
 
         if chromedriver_path:
             if not os.path.exists(chromedriver_path):
                 raise URLAnalysisError(f"CHROME_DRIVER_PATH does not exist: {chromedriver_path}")
             service = ChromeService(chromedriver_path)
+            used_browser = "chrome"
         elif edgedriver_path:
             if not os.path.exists(edgedriver_path):
                 raise URLAnalysisError(f"EDGE_DRIVER_PATH does not exist: {edgedriver_path}")
             used_browser = "edge"
             service = EdgeService(edgedriver_path)
         else:
-            # Look for a local driver executable in PATH or known cache folders before downloading
-            path_chromedriver = (
-                shutil.which("chromedriver")
-                or shutil.which("chromedriver.exe")
-                or _find_local_driver_path("chrome")
-            )
-            path_edgedriver = (
-                shutil.which("msedgedriver")
-                or shutil.which("msedgedriver.exe")
-                or _find_local_driver_path("edge")
-            )
-            if path_chromedriver:
-                LOGGER.info("Found local chromedriver at %s", path_chromedriver)
-                service = ChromeService(path_chromedriver)
-            elif path_edgedriver:
-                LOGGER.info("Found local msedgedriver at %s", path_edgedriver)
-                used_browser = "edge"
-                service = EdgeService(path_edgedriver)
+            if chrome_browser:
+                candidate_path = (
+                    shutil.which("chromedriver")
+                    or shutil.which("chromedriver.exe")
+                )
+                if candidate_path:
+                    LOGGER.info("Found local chromedriver at %s", candidate_path)
+                    service = ChromeService(candidate_path)
+                    used_browser = "chrome"
+                else:
+                    # Let Selenium Manager resolve the driver for the installed
+                    # browser version. Cached drivers can be stale after a browser
+                    # update, so do not preselect one from the cache here.
+                    LOGGER.info("No local ChromeDriver found; using Selenium Manager")
+                    used_browser = "chrome"
+            elif edge_browser:
+                candidate_path = (
+                    shutil.which("msedgedriver")
+                    or shutil.which("msedgedriver.exe")
+                )
+                if candidate_path:
+                    LOGGER.info("Found local msedgedriver at %s", candidate_path)
+                    service = EdgeService(candidate_path)
+                    used_browser = "edge"
+                else:
+                    LOGGER.info("No local EdgeDriver found; using Selenium Manager")
+                    used_browser = "edge"
             else:
-                try:
-                    chromedriver_path = ChromeDriverManager().install()
-                    service = ChromeService(chromedriver_path)
-                except Exception as e:
-                    LOGGER.warning("ChromeDriverManager failed to install driver: %s", e)
-                    try:
-                        from webdriver_manager.microsoft import EdgeChromiumDriverManager
-                        edriver_path = EdgeChromiumDriverManager().install()
-                        service = EdgeService(edriver_path)
-                        used_browser = "edge"
-                    except Exception as ee:
-                        LOGGER.exception("EdgeDriverManager fallback also failed: %s", ee)
-                        raise URLAnalysisError(
-                            "Failed to obtain a suitable WebDriver. "
-                            "Set CHROME_DRIVER_PATH or EDGE_DRIVER_PATH to a local driver binary, "
-                            "or install a compatible chromedriver/msedgedriver in your PATH."
-                        ) from ee
+                raise URLAnalysisError(
+                    "Failed to obtain a suitable WebDriver. "
+                    "Set CHROME_DRIVER_PATH or EDGE_DRIVER_PATH to a local driver binary, "
+                    "or install a compatible chromedriver/msedgedriver in your PATH."
+                )
 
         if used_browser == "edge":
             options = EdgeOptions()
+            browser_binary = _find_browser_binary("edge")
         else:
             options = ChromeOptions()
+            browser_binary = _find_browser_binary("chrome")
+
+        if browser_binary:
+            options.binary_location = browser_binary
 
         options.headless = True
         options.add_argument("--disable-gpu")
@@ -503,17 +657,54 @@ def _render_page_html(url: str, timeout: int = DEFAULT_TIMEOUT) -> str:
         options.add_argument("--remote-allow-origins=*")
 
         LOGGER.debug(
-            "Launching Selenium render: browser=%s driver_path=%s url=%s",
+            "Launching Selenium render: browser=%s driver_path=%s browser_binary=%s url=%s",
             used_browser,
             getattr(service, "path", None) or getattr(service, "executable_path", None),
+            browser_binary,
             url,
         )
 
         # Start the appropriate webdriver
-        if used_browser == "edge":
-            driver = webdriver.Edge(service=service, options=options)
-        else:
-            driver = webdriver.Chrome(service=service, options=options)
+        try:
+            if used_browser == "edge":
+                if service is None:
+                    driver = webdriver.Edge(options=options)
+                else:
+                    driver = webdriver.Edge(service=service, options=options)
+            else:
+                if service is None:
+                    driver = webdriver.Chrome(options=options)
+                else:
+                    driver = webdriver.Chrome(service=service, options=options)
+        except WebDriverException as exc:
+            if used_browser != "edge":
+                fallback_browser = _find_browser_binary("edge")
+                if fallback_browser:
+                    LOGGER.warning("Chrome launch failed for %s; retrying with Edge browser: %s", url, exc)
+                    options = EdgeOptions()
+                    options.binary_location = fallback_browser
+                    options.headless = True
+                    options.add_argument("--disable-gpu")
+                    options.add_argument("--no-sandbox")
+                    options.add_argument("--disable-dev-shm-usage")
+                    options.add_argument("--window-size=1920,1080")
+                    options.add_argument("--disable-extensions")
+                    options.add_argument("--disable-infobars")
+                    options.add_argument("--remote-allow-origins=*")
+                    if service is None:
+                        driver = webdriver.Edge(options=options)
+                    else:
+                        driver = webdriver.Edge(
+                            service=EdgeService(
+                                service.path if hasattr(service, "path") else service.executable_path
+                            ),
+                            options=options,
+                        )
+                    used_browser = "edge"
+                else:
+                    raise
+            else:
+                raise
 
         driver.set_page_load_timeout(timeout)
         driver.get(url)
@@ -557,15 +748,20 @@ async def analyze_url(url: str, render_js: bool = False, timeout: int = DEFAULT_
     Raises:
         URLAnalysisError: on validation, network, or parsing failures.
     """
-    normalized_url = _extract_raw_url_from_input(url)
+    raw_input = url
+    normalized_url = sanitize_url(raw_input)
+    print("Raw URL:", raw_input)
+    print("Sanitized URL:", normalized_url)
     if not normalized_url:
-        raise URLAnalysisError("Invalid or malformed URL input")
-    if not _is_valid_url(normalized_url):
-        raise URLAnalysisError("Invalid URL scheme or hostname")
+        raise URLAnalysisError(INVALID_PUBLIC_URL_MESSAGE)
+    if not validate_url(normalized_url):
+        raise URLAnalysisError(INVALID_PUBLIC_URL_MESSAGE)
 
     parsed = urlparse(normalized_url)
-    if _is_private_host(parsed.hostname or ""):
-        raise URLAnalysisError("Refusing to analyze private or loopback hosts")
+    hostname = parsed.hostname or ""
+    print("Hostname:", hostname)
+    if not validate_host(hostname):
+        raise URLAnalysisError(PRIVATE_HOST_MESSAGE)
     url = normalized_url
 
     headers = {"User-Agent": USER_AGENT}
@@ -594,7 +790,7 @@ async def analyze_url(url: str, render_js: bool = False, timeout: int = DEFAULT_
                     LOGGER.warning("Initial fetch failed for %s with SSL verification enabled; retrying with verification disabled: %s", url, exc)
                     continue
                 LOGGER.exception("Request failed for %s: %s", url, exc)
-                raise URLAnalysisError(f"Failed to fetch URL: {exc}") from exc
+                break
         elif _REQUESTS_AVAILABLE:
             try:
                 resp = await asyncio.to_thread(_fetch_with_requests, verify_ssl)
@@ -605,12 +801,20 @@ async def analyze_url(url: str, render_js: bool = False, timeout: int = DEFAULT_
                     LOGGER.warning("Initial fetch failed for %s with SSL verification enabled; retrying with verification disabled: %s", url, exc)
                     continue
                 LOGGER.exception("Request failed for %s: %s", url, exc)
-                raise URLAnalysisError(f"Failed to fetch URL: {exc}") from exc
+                break
         else:
             raise URLAnalysisError("No HTTP client available to fetch URL; install httpx or requests.")
 
+    if resp is None and _REQUESTS_AVAILABLE and _HTTPX_AVAILABLE:
+        try:
+            resp = await asyncio.to_thread(_fetch_with_requests, VERIFY_SSL)
+        except Exception as exc:
+            last_exc = exc
+
     if resp is None:
-        raise URLAnalysisError(f"Failed to fetch URL: {last_exc}") from last_exc
+        message = _fetch_error_message(last_exc)
+        LOGGER.error("All HTTP clients failed for %s: %s", url, message)
+        raise URLAnalysisError(f"Failed to fetch URL: {message}") from last_exc
 
     if getattr(resp, 'status_code', None) is None:
         raise URLAnalysisError("Unexpected response object from HTTP client")

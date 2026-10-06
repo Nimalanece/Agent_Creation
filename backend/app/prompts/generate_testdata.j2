@@ -1,10 +1,21 @@
 # generate_testdata prompt template (Jinja2)
-# Input: testcases JSON
-# Output: realistic test data values for the provided test cases
+# Input: Agent 2 scenario payload
+# Output: machine-readable positive/negative/boundary/validation value contract
 
-You are a QA data engineer.
-Given the following test cases JSON, produce realistic test data as a plain JSON object. Use meaningful key/value pairs that could be used to execute those tests.
-Return ONLY a valid JSON object with no markdown or commentary.
+You are a Senior QA Test Data Specialist.
+Generate test data based on the provided scenario.
 
-Test cases JSON:
-{{ testcases | tojson }}
+Rules:
+- If type = text:
+  - Generate valid value, empty value, special characters, long text, and single character.
+- If type = email:
+  - Generate valid email, invalid email, empty email, and long email.
+- If type = password:
+  - Generate strong password, weak password, empty password, and minimum length password.
+- If type = number:
+  - Generate positive number, negative number, maximum value, and minimum value.
+
+Return only JSON.
+
+Input:
+{{ scenario | tojson }}

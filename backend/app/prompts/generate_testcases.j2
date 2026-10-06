@@ -1,15 +1,91 @@
 # generate_testcases prompt template (Jinja2)
 # Input: scenarios JSON
-# Output: a comprehensive list of test cases with steps and expected results
+# Output: a strict Agent 1 test-case contract optimized for Agent 2 and Agent 3 consumption
 
-You are a QA engineer.
+You are a QA automation architect.
 Given the following scenarios JSON, produce a comprehensive set of test cases.
 Requirements:
 - Generate at least one detailed test case for each scenario.
 - If there are 10+ scenarios, produce 10+ test cases.
-- Cover happy path, negative path, validation, and navigation cases.
-- Return ONLY a valid JSON object with the exact shape:
-{"testcases": [{"id": "t1", "title": "...", "description": "...", "preconditions": [], "steps": [{"action": "...", "selector": "...", "value": "..."}], "expected_result": {}}]}
+- Cover happy path, negative path, validation, boundary, navigation, security, and page-load/visibility cases.
+- Every generated test case must include the following required keys:
+  scenario_id, title, test_type, priority, preconditions, steps, expected_results, mapping.
+- The test_type classification must be one of:
+  functional, positive, negative, validation, boundary, navigation, security
+- The steps array must use JSON objects with COMPLETE LOCATOR METADATA for Selenium automation readiness.
+- CRITICAL: EVERY STEP MUST INCLUDE THESE FIELDS FOR AGENT 3 AUTOMATION:
+  * step_number: Sequence number
+  * action: Action type (open_url, locate_element, click_element, enter_text, select_checkbox, select_radio, select_dropdown_option, upload_file, submit_form, populate_form, verify_element_visible, verify_page_title)
+  * target: Selector string (for backward compatibility)
+  * element_name: Human-readable element name from mapping (e.g., "First Name", "Submit Button", "Select Menu")
+  * selector: The CSS selector or locator expression
+  * locator_type: Type of locator - "id", "css_selector", "xpath", "class", "name", "title", "url", or other Selenium locator type
+  * locator_value: The raw locator value WITHOUT prefix (e.g., "firstName" for id, "input[type='text']" for css_selector)
+  * value: (Optional, for enter_text, upload_file) The test data to enter
+  * expected_value: (Optional, for verify_page_title) The expected value
+  * expected_url: (Optional, for navigation) The expected URL or URL pattern
+- Example step with FULL METADATA:
+  {"step_number": 2, "action": "click_element", "target": "a[href='/select-menu']", "element_name": "Select Menu", "selector": "a[href='/select-menu']", "locator_type": "css_selector", "locator_value": "a[href='/select-menu']"}
+- Example input step with VALUE:
+  {"step_number": 2, "action": "enter_text", "target": "#firstName", "element_name": "First Name", "selector": "#firstName", "locator_type": "id", "locator_value": "firstName", "value": "Sample Text"}
+- LOCATOR TYPE GUIDANCE:
+  * For HTML id attributes: locator_type = "id", locator_value = the id (without #)
+  * For CSS selectors: locator_type = "css_selector", locator_value = the full selector
+  * For XPath: locator_type = "xpath", locator_value = the full XPath expression
+  * For href attributes: locator_type = "css_selector", locator_value = "a[href='/path']"
+  * For class selectors: locator_type = "class", locator_value = the class name
+  * For name attributes: locator_type = "name", locator_value = the name
+  * For page title: locator_type = "title", locator_value = expected title
+  * For page URL: locator_type = "url", locator_value = the URL
+- ELEMENT-SPECIFIC ACTIONS (DO NOT MIX ACTIONS FOR DIFFERENT ELEMENT TYPES):
+  - For LINK elements: Always use "click_element" action with selector metadata, NEVER "enter_text"
+  - For BUTTON elements: Always use "click_element" action with selector metadata
+  - For TEXT/EMAIL/PASSWORD INPUT: Use "enter_text" action with selector metadata and sample data
+  - For CHECKBOX: Use "select_checkbox" action with selector metadata
+  - For RADIO: Use "select_radio" action with selector metadata
+  - For DROPDOWN/SELECT: Use "select_dropdown_option" action with selector metadata and value selection
+  - For FILE UPLOAD: Use "upload_file" action with selector metadata and file path
+  - For FORMS: Use "populate_form" and "submit_form" actions with selector metadata
+  - NEVER use enter_text on links, buttons, or dropdowns
+- The expected_results array must contain Selenium-friendly verifiable assertions with EXPLICIT ELEMENT NAMES and EXPECTED VALUES.
+- CRITICAL: Generate different expected_results for each test_type AND element type - NOT the same for every test case:
+  * Functional/Page Load: "Page loads successfully", "Browser title matches expected value", "Primary content is visible"
+  * Navigation: "'Select Menu' link is visible and clickable", "User is redirected to '/select-menu'", "URL contains '/select-menu'", "Select Menu page loads successfully"
+  * Positive (Valid Form): "Form submits successfully", "Success message is displayed", "No validation errors appear"
+  * Negative (Invalid Form): "Submission is prevented", "Validation message is displayed", "Invalid fields are highlighted"
+  * Validation: "'Email' field validation error is displayed", "User feedback is clear and actionable"
+  * Button Click: "'Submit' button is visible and clickable", "Form submission is triggered", "Success message appears"
+  * Link Navigation: "'Select Menu' link is visible and clickable", "Navigation succeeds", "Target page loads successfully"
+  * Text Input Field: "'First Name' field is visible and accessible", "'First Name' field accepts user input", "Entered value is displayed correctly"
+  * Checkbox: "'Sports' checkbox is visible", "'Sports' checkbox can be selected", "'Sports' checkbox state changes correctly"
+  * Radio: "'Male' radio option is visible", "'Male' radio option can be selected", "'Male' selected state is retained"
+  * Dropdown: "'Country' dropdown is visible", "'Country' dropdown options are accessible", "Selected option in 'Country' is displayed"
+  * File Upload: "'Picture' upload field is visible", "File is accepted by 'Picture'", "Uploaded filename is displayed"
+- CRITICAL: Use EXPLICIT element names (from mapping) and EXPECTED VALUES in all expected_results. Do NOT use generic assertions.
+- Do NOT emit phrases such as "Outcome is verified", "Validation successful", "Test passed", or any generic ceremony-style pass phrase that cannot be turned into an assertion.
+- Every generated test case must add a mapping object that preserves scenario metadata and includes element_type, selector, locator_type, locator_value, and label/field_name information.
+- Every generated test case must also include an input_fields array that identifies which page controls are relevant to that test.
+- The input_fields array may contain only a subset of these values when they are relevant to a given test case: "username", "password", "email", "phone", "search".
+- Every generated test case must include a non-empty required_data array whenever user inputs are involved.
+- The required_data object is optimized for downstream Agent 2 and must follow this contract:
+  [{"field_name": "First Name", "field_type": "text", "business_purpose": "User Identification", "expected_format": "Text string", "validation_rules": ["cannot be empty", "must be at least 2 characters"]}]
+- Supported field_type values: email, username, password, phone_number, text, number, date, search, dropdown, checkbox, url, file.
+- Every required_data item must capture: field_name, field_type, business_purpose, expected_format, validation_rules.
+- Infer field_type from page analysis, test steps, labels, placeholders, and validation clues.
+- Every generated test case must include an automation_hints object consumed by Agent 3 Selenium Automation.
+- The automation_hints object must follow this shape:
+  {"page_name": "LoginPage", "actions": ["enter_first_name", "enter_email", "click_submit"], "assertions": ["form_submitted_successfully", "dashboard_visible"]}
+- The actions array should be Selenium-style reusable action names, and assertions should be Selenium-ready outcome names.
+- The expected_results array must be a verifiable page/DOM outcome suitable for Selenium assertions.
+- Good examples:
+  - "'First Name' field accepts text input"
+  - "'Submit' button is visible and clickable"
+  - "Form submits successfully"
+  - "Success message is displayed"
+  - "URL contains '/success'"
+- Return ONLY a valid JSON object with strict JSON syntax.
+- Use the exact objects in the expected response contract:
+{"application_name": "demosite", "test_cases": [{"scenario_id": "TS_01", "title": "Verify page loads successfully", "test_type": "functional", "priority": "high", "preconditions": ["Application is available", "User has access to the page"], "steps": [{"step_number": 1, "action": "open_url", "target": "application_url", "element_name": "Application", "selector": "application_url", "locator_type": "url", "locator_value": "application_url"}, {"step_number": 2, "action": "verify_page_title", "target": "page_title", "element_name": "Page Title", "selector": "page_title", "locator_type": "title", "locator_value": "demosite", "expected_value": "demosite"}], "expected_results": ["Page loads successfully", "Browser title matches 'demosite'", "Primary content is visible"], "mapping": {"page": "load", "element_type": "page_load", "expected_title": "demosite"}, "input_fields": [], "required_data": [], "automation_hints": {"page_name": "HomePage", "actions": ["open_application", "verify_page_load"], "assertions": ["page_loaded_successfully", "title_verified"]}}]}
 Do not include markdown, commentary, or extra text.
 
 Scenarios JSON:

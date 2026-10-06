@@ -109,7 +109,7 @@ const ScenariosCard: React.FC<Props> = ({ scenarios }) => {
           <select
             value={pageSize}
             onChange={(e) => { setPageSize(Number(e.target.value)); setPage(1); }}
-            className="border rounded px-2 py-1 text-sm"
+            className="rounded-lg border border-slate-600/70 bg-slate-950/70 px-2 py-1 text-sm text-slate-200 outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-500/20"
             disabled={showAll}
           >
             {PAGE_SIZES.map((s) => (
@@ -159,6 +159,33 @@ const ScenariosCard: React.FC<Props> = ({ scenarios }) => {
                             <div>
                               <span className="font-medium">Description:</span> {s.description || s.title || "No description available."}
                             </div>
+                            {s.test_type && (
+                              <div>
+                                <span className="font-medium">Test Type:</span> {s.test_type}
+                              </div>
+                            )}
+                            {s.preconditions && s.preconditions.length > 0 && (
+                              <div>
+                                <span className="font-medium">Preconditions:</span>
+                                <ul className="list-disc ml-5">
+                                  {s.preconditions.map((p, idx) => <li key={idx}>{p}</li>)}
+                                </ul>
+                              </div>
+                            )}
+                            {s.steps && s.steps.length > 0 && (
+                              <div>
+                                <span className="font-medium">Steps:</span>
+                                <pre className="mt-1 bg-white rounded border border-gray-200 p-2 text-xs overflow-x-auto">{JSON.stringify(s.steps, null, 2)}</pre>
+                              </div>
+                            )}
+                            {s.expected_results && s.expected_results.length > 0 && (
+                              <div>
+                                <span className="font-medium">Expected Results:</span>
+                                <ul className="list-disc ml-5">
+                                  {s.expected_results.map((er, idx) => <li key={idx}>{er}</li>)}
+                                </ul>
+                              </div>
+                            )}
                             {s.mapping && Object.keys(s.mapping).length > 0 ? (
                               <div>
                                 <span className="font-medium">Mapping:</span>
@@ -215,7 +242,7 @@ const ScenariosCard: React.FC<Props> = ({ scenarios }) => {
                     max={totalPages}
                     value={seekPage}
                     onChange={(e) => setSeekPage(Number(e.target.value))}
-                    className="w-20 border rounded px-2 py-1 text-sm"
+                    className="w-20 rounded-lg border border-slate-600/70 bg-slate-950/70 px-2 py-1 text-sm text-slate-200 outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-500/20"
                   />
                   <button
                     onClick={handleJump}

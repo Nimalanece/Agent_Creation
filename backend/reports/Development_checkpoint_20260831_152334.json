@@ -1,0 +1,14 @@
+{
+  "specs": {},
+  "functional_spec_count": {},
+  "testsuites": [
+    {
+      "cases": []
+    }
+  ],
+  "test_environment": "Development",
+  "timestamp": "31 Aug 2026, 15:23",
+  "img_url": "https://icon.icepanel.io/Technology/svg/pytest.svg",
+  "test_status": "complete",
+  "report_title": "pytest HTML Report"
+}

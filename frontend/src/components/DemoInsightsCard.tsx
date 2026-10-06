@@ -4,14 +4,12 @@ import { DemoInsight } from "../types/api";
 interface Props {
   defect_possibilities?: DemoInsight[] | null;
   risk_areas?: Array<string | { area?: string; reason?: string }> | null;
-  automation_coverage_percent?: number | null;
   recommended_smoke_tests?: string[] | null;
 }
 
 const DemoInsightsCard: React.FC<Props> = ({
   defect_possibilities,
   risk_areas,
-  automation_coverage_percent,
   recommended_smoke_tests,
 }) => {
   return (
@@ -45,11 +43,6 @@ const DemoInsightsCard: React.FC<Props> = ({
               ))}
             </ul>
           )}
-        </div>
-
-        <div className="border rounded p-3">
-          <h3 className="text-sm font-semibold">Automation Coverage</h3>
-          <p className="text-3xl font-bold text-indigo-600 mt-2">{automation_coverage_percent ?? "—"}%</p>
         </div>
 
         <div className="border rounded p-3">

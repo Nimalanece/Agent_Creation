@@ -1,0 +1,506 @@
+from typing import Any, Dict, List
+
+from app.core.groq_service import GroqService, GroqServiceError
+
+
+_BLOCKED_EXPECTED_RESULT_PHRASES = (
+    "outcome is verified",
+    "verification successful",
+    "validations successful",
+    "validation successful",
+    "test passed",
+)
+
+
+def _expected_result_to_text(value: Any) -> str:
+    """Normalize an expected result payload into an automation-friendly assertion phrase.
+
+    The product contract must be convertable into Selenium assertions. Generic UX text
+    such as "Outcome is verified" is therefore washed out to a concrete, assertable
+    statement whenever the caller of the service only supplies opaque text.
+    """
+    if isinstance(value, str):
+        phrase = value.strip()
+        if not phrase:
+            return "Element is visible"
+        lowered = phrase.lower()
+        if any(blocked in lowered for blocked in _BLOCKED_EXPECTED_RESULT_PHRASES):
+            return "Browser title equals expected title"
+        return phrase
+    if isinstance(value, dict):
+        if value.get("message"):
+            return str(value.get("message")).strip()
+        if value.get("title_present") is True:
+            return "Browser title equals expected title"
+        if value.get("status"):
+            return str(value.get("status")).strip()
+        return "Element is visible"
+    if isinstance(value, list):
+        text = " ".join(str(item) for item in value if item)
+        return text.strip() or "Element is visible"
+    if value is None:
+        return "Element is visible"
+    return str(value)
+
+
+def _expected_results_to_assertions(raw: Any) -> List[str]:
+    if isinstance(raw, str):
+        values = [raw]
+    elif isinstance(raw, list):
+        values = [item for item in raw if item is not None]
+    elif isinstance(raw, dict):
+        values = [raw]
+    else:
+        values = []
+
+    assertions = []
+    for item in values:
+        if isinstance(item, str):
+            text = str(item).strip()
+        elif isinstance(item, dict):
+            text = str(item.get("message") or item.get("status") or item.get("assertion") or "Element is visible").strip()
+        else:
+            text = str(item).strip()
+
+        serialized = _expected_result_to_text(text)
+        if any(blocked in serialized.lower() for blocked in _BLOCKED_EXPECTED_RESULT_PHRASES):
+            serialized = "Validation message is displayed"
+        assertions.append(serialized)
+
+    if not assertions:
+        assertions = ["Element is visible"]
+    return assertions
+
+
+def _generate_expected_results_for_test_type(
+    test_type: str = "functional",
+    title: str = "",
+    description: str = "",
+    mapping: Dict[str, Any] = None,
+    input_fields: List[str] = None,
+) -> List[str]:
+    """Generate scenario-specific expected results based on test intent and context.
+
+    Args:
+        test_type: The classification of the test (e.g., functional, positive, negative, navigation, security, validation, boundary).
+        title: The test title or scenario name.
+        description: The test description.
+        mapping: Optional mapping context with field details.
+        input_fields: Optional list of input field names involved in the test.
+
+    Returns:
+        List of specific, executable expected result assertions.
+    """
+    if mapping is None:
+        mapping = {}
+    if input_fields is None:
+        input_fields = []
+
+    test_type = str(test_type or "functional").strip().lower()
+    title = str(title or "").strip().lower()
+    description = str(description or "").strip().lower()
+    field_name = str(
+        mapping.get("field_name") or mapping.get("name") or mapping.get("label") or (input_fields[0] if input_fields else "Target field")
+    ).strip()
+
+    expected = []
+
+    # Page Load Scenario
+    if test_type == "functional" or "page load" in title or "page load" in description:
+        if "page load" in title or "page load" in description or test_type == "functional":
+            expected.extend(["Page loads successfully", "Browser title equals expected title", "Primary content is visible"])
+            return expected
+
+    # Navigation Scenario
+    if test_type == "navigation" or "redirect" in title or "redirect" in description or "navigation" in title:
+        expected.extend(
+            [
+                "User is redirected to the target page",
+                "URL contains expected path",
+                "Target page loads successfully",
+            ]
+        )
+        return expected
+
+    # Valid Form Submission / Positive Test
+    if test_type == "positive" or "submit" in title or "submit" in description:
+        if "invalid" not in description and "negative" not in description:
+            expected.extend(
+                [
+                    f"{field_name} form submits successfully",
+                    "Success message is displayed",
+                    "No validation errors appear",
+                ]
+            )
+            return expected
+
+    # Invalid Form Submission / Negative Test
+    if test_type == "negative" or "negative" in title or "invalid" in title or "invalid" in description:
+        expected.extend(
+            [
+                "Submission is prevented",
+                "Validation message is displayed",
+                "Invalid fields are highlighted",
+            ]
+        )
+        return expected
+
+    # Validation Test
+    if test_type == "validation" or "validation" in title or "error" in description or "validation" in description:
+        expected.extend(
+            [
+                f"{field_name} validation check is performed",
+                "Validation message is displayed",
+                "User feedback indicates validation failure",
+            ]
+        )
+        return expected
+
+    # Boundary Test
+    if test_type == "boundary" or "boundary" in title or "limit" in description or "length" in description:
+        expected.extend(
+            [
+                f"{field_name} boundary condition is tested",
+                "Limit is enforced",
+                "System behaves correctly at threshold",
+            ]
+        )
+        return expected
+
+    # Security Test
+    if test_type == "security" or "security" in title or "xss" in description or "injection" in description:
+        expected.extend(
+            [
+                "Security validation is performed",
+                "Malicious input is rejected",
+                "Application remains secure",
+            ]
+        )
+        return expected
+
+    # Button Click Scenario
+    if "button" in title or "click" in title or "action" in title:
+        if "form" not in title:
+            expected.extend(["Button is clickable", "Expected action is triggered", "State change is observable"])
+            return expected
+
+    # Link Validation Scenario
+    if "link" in title or "navigation" in title or "navigate" in description:
+        expected.extend(
+            ["Link is clickable", "Navigation occurs successfully", "URL matches expected destination"]
+        )
+        return expected
+
+    # Input Field Scenario
+    if test_type == "functional" or "input" in title or "field" in title or "text" in title:
+        expected.extend(
+            [
+                f"{field_name} is visible",
+                f"{field_name} accepts user input",
+                "Entered value is displayed correctly",
+            ]
+        )
+        return expected
+
+    # Default fallback
+    return ["Test condition is observable", "System responds as designed"]
+
+
+def _automation_hints_from_item(item: Any) -> Dict[str, Any]:
+    raw = item.get("automation_hints") if isinstance(item, dict) else None
+    if isinstance(raw, dict):
+        page_name = str(raw.get("page_name") or "Page").strip() or "Page"
+        actions = raw.get("actions") or []
+        assertions = raw.get("assertions") or []
+        return {
+            "page_name": page_name,
+            "actions": [str(action) for action in actions if str(action).strip()] if isinstance(actions, list) else [],
+            "assertions": [str(assertion) for assertion in assertions if str(assertion).strip()] if isinstance(assertions, list) else [],
+        }
+    return {
+        "page_name": "Page",
+        "actions": ["open_url", "verify_page_title", "verify_element_visible"],
+        "assertions": ["Browser title equals expected title", "Element is visible"],
+    }
+
+
+def _normalize_step(item: Dict[str, Any], index: int) -> Dict[str, Any]:
+    """Promote a vague test step into a Selenium-compatible control/action instruction."""
+    raw_action = str(item.get("action") or item.get("verb") or item.get("name") or "perform_action").strip().lower()
+
+    # Action vocabulary normalization
+    if raw_action in {"open", "open_url", "navigate", "launch"} or "page load" in raw_action:
+        action = "open_url"
+        target = item.get("target") or item.get("selector") or "application_url"
+        payload = {"step_number": index, "action": action, "target": target}
+    elif "verify title" in raw_action or "title" in raw_action or raw_action in {"check title", "browser title"}:
+        action = "verify_page_title"
+        expected = item.get("expected_value") or item.get("value") or "expected_title"
+        payload = {"step_number": index, "action": action, "expected_value": expected}
+    elif "visible" in raw_action or "content" in raw_action or "verify" in raw_action or raw_action in {"observe", "inspect", "check"}:
+        action = "verify_element_visible"
+        target = item.get("target") or item.get("selector") or "primary_content"
+        payload = {"step_number": index, "action": action, "target": target}
+    elif "click" in raw_action or "submit" in raw_action or "button" in raw_action:
+        action = "click_element"
+        target = item.get("target") or item.get("selector") or "submit_button"
+        payload = {"step_number": index, "action": action, "target": target}
+    elif "enter" in raw_action or "fill" in raw_action or "text" in raw_action:
+        action = "enter_text"
+        target = item.get("target") or item.get("selector") or "target_input"
+        payload = {"step_number": index, "action": action, "target": target, "value": item.get("value") or "sample_value"}
+    elif "error" in raw_action or "message" in raw_action:
+        action = "assert_validation_message"
+        target = item.get("target") or item.get("selector") or "feedback_message"
+        payload = {"step_number": index, "action": action, "target": target}
+    else:
+        action = "perform_action"
+        target = item.get("target") or item.get("selector")
+        payload = {"step_number": index, "action": action}
+        if target:
+            payload["target"] = target
+        if item.get("value") is not None:
+            payload["value"] = item.get("value")
+        if item.get("expected_value") is not None:
+            payload["expected_value"] = item.get("expected_value")
+
+    return payload
+
+
+def _extract_scenario_list(scenarios: Any) -> List[Dict[str, Any]]:
+    if isinstance(scenarios, dict):
+        candidate = scenarios.get("scenarios")
+        if isinstance(candidate, list):
+            return [item for item in candidate if isinstance(item, dict)]
+    if isinstance(scenarios, list):
+        return [item for item in scenarios if isinstance(item, dict)]
+    return []
+
+
+def _build_fallback_testcases(scenarios: Any) -> List[Dict[str, Any]]:
+    scenario_items = _extract_scenario_list(scenarios)
+    if not scenario_items:
+        test_type = "functional"
+        expected_results = _generate_expected_results_for_test_type(
+            test_type=test_type, title="Verify page renders", description="Ensure the target page renders without errors."
+        )
+        return [
+            {
+                "id": "fallback-t1",
+                "title": "Verify page renders",
+                "description": "Ensure the target page renders without errors.",
+                "test_type": test_type,
+                "preconditions": [],
+                "steps": [{"step_number": 1, "action": "open_url", "target": "application_url"}],
+                "expected_result": expected_results[0] if expected_results else "Element is visible",
+                "expected_results": expected_results,
+            }
+        ]
+
+    fallback_cases = []
+    for index, scenario in enumerate(scenario_items, start=1):
+        title = str(scenario.get("title") or f"Scenario {index}").strip()
+        description = str(scenario.get("description") or f"Validate {title}").strip()
+        case_id = f"t{index}"
+        test_type = str(scenario.get("test_type") or "functional").strip().lower()
+        steps = [{"step_number": 1, "action": "open_url", "target": "application_url"}]
+        lowered = title.lower()
+
+        # Determine test_type based on title if not explicitly provided
+        if test_type == "functional" or not test_type:
+            if "form" in lowered or "submit" in lowered:
+                test_type = "positive" if "invalid" not in lowered else "negative"
+            elif "navigation" in lowered or "redirect" in lowered:
+                test_type = "navigation"
+            elif "button" in lowered or "click" in lowered:
+                test_type = "functional"
+            elif "link" in lowered:
+                test_type = "functional"
+            elif "input" in lowered or "field" in lowered:
+                test_type = "functional"
+            else:
+                test_type = "functional"
+
+        # Generate scenario-specific steps
+        if "form" in lowered:
+            steps.append({"step_number": 2, "action": "enter_text", "target": "form_input", "value": "valid-value"})
+            steps.append({"step_number": 3, "action": "click_submit", "target": "submit_button"})
+        elif "login" in lowered:
+            steps.append({"step_number": 2, "action": "enter_username", "target": "username_field", "value": "valid-user"})
+            steps.append({"step_number": 3, "action": "enter_password", "target": "password_field", "value": "valid-password"})
+            steps.append({"step_number": 4, "action": "click_login", "target": "login_button"})
+        elif "button" in lowered or "click" in lowered or "action" in lowered:
+            steps.append({"step_number": 2, "action": "click_element", "target": "primary_button"})
+        elif "link" in lowered:
+            steps.append({"step_number": 2, "action": "click_element", "target": "navigation_link"})
+        elif "input" in lowered:
+            steps.append({"step_number": 2, "action": "enter_text", "target": "target_input", "value": "sample"})
+        else:
+            steps.append({"step_number": 2, "action": "verify_page_title", "expected_value": "demosite"})
+            steps.append({"step_number": 3, "action": "verify_element_visible", "target": "primary_content"})
+
+        # Generate dynamic expected results based on test_type and context
+        expected_results = _generate_expected_results_for_test_type(
+            test_type=test_type, title=title, description=description, mapping=scenario.get("mapping") or {}
+        )
+
+        fallback_cases.append(
+            {
+                "id": case_id,
+                "title": title,
+                "description": description,
+                "test_type": test_type,
+                "preconditions": ["The application is available", "The user has access to the target page"],
+                "steps": steps,
+                "expected_results": expected_results,
+                "expected_result": expected_results[0] if expected_results else "Element is visible",
+            }
+        )
+
+    return fallback_cases
+
+
+def _normalize_required_data(item: Any) -> List[Dict[str, Any]]:
+    raw = item.get("required_data") if isinstance(item, dict) else None
+    if isinstance(raw, list):
+        normalized = []
+        for entry in raw:
+            if not isinstance(entry, dict):
+                continue
+            field_name = str(entry.get("field_name") or "").strip()
+            if not field_name:
+                continue
+            normalized.append({
+                "field_name": field_name,
+                "field_type": str(entry.get("field_type") or "text").strip() or "text",
+                "business_purpose": str(entry.get("business_purpose") or "User interaction value").strip() or "User interaction value",
+                "expected_format": str(entry.get("expected_format") or "value").strip() or "value",
+                "validation_rules": [str(rule) for rule in (entry.get("validation_rules") or []) if str(rule).strip()] or ["cannot be empty when required"],
+            })
+        return normalized
+    return []
+
+
+def _normalize_testcases(parsed: Any, scenarios: Any) -> List[Dict[str, Any]]:
+    if isinstance(parsed, dict):
+        if isinstance(parsed.get("test_cases"), list):
+            candidates = parsed["test_cases"]
+        elif isinstance(parsed.get("testcases"), list):
+            candidates = parsed["testcases"]
+        else:
+            candidates = []
+    elif isinstance(parsed, list):
+        candidates = parsed
+    else:
+        candidates = []
+
+    normalized = []
+    seen_titles = set()
+    for item in candidates:
+        if not isinstance(item, dict):
+            continue
+        title = str(item.get("title") or "").strip()
+        if not title:
+            continue
+        if title.lower() in seen_titles:
+            continue
+        seen_titles.add(title.lower())
+
+        input_fields = [str(alias) for alias in (item.get("input_fields") or []) if str(alias).strip()] or []
+        required_data = _normalize_required_data(item)
+        if not required_data and input_fields:
+            required_data = [{
+                "field_name": field,
+                "field_type": "text",
+                "business_purpose": "User interaction value",
+                "expected_format": "value",
+                "validation_rules": ["cannot be empty when required"],
+            } for field in input_fields]
+
+        steps = item.get("steps") or item.get("test_steps") or [{"action": "verify_element_visible", "target": "primary_content"}]
+        if isinstance(steps, list) and steps:
+            normalized_steps = []
+            for index, step in enumerate(steps, start=1):
+                if isinstance(step, dict):
+                    normalized_steps.append(_normalize_step(step, index))
+                else:
+                    normalized_steps.append({
+                        "step_number": index,
+                        "action": "verify_element_visible",
+                        "target": "primary_content",
+                        "value": step,
+                    })
+            steps = normalized_steps
+        else:
+            steps = [{"step_number": 1, "action": "verify_element_visible", "target": "primary_content"}]
+
+        test_type = str(item.get("test_type") or "functional").strip().lower()
+        mapping = item.get("mapping") or {}
+        expected_results = item.get("expected_results") or item.get("expected_result") or []
+        expected_results = _expected_results_to_assertions(expected_results)
+
+        # If no expected results were provided or only generic fallback, generate dynamic results based on test intent
+        if not expected_results or expected_results == ["Element is visible"]:
+            expected_results = _generate_expected_results_for_test_type(
+                test_type=test_type, title=title, description=item.get("description") or f"Validate {title}", mapping=mapping, input_fields=input_fields
+            )
+
+        if not expected_results:
+            expected_results = ["Element is visible"]
+
+        normalized.append(
+            {
+                "id": item.get("id") or f"t{len(normalized) + 1}",
+                "scenario_id": item.get("scenario_id") or item.get("test_scenario_id") or f"TS_{len(normalized)+1:02d}",
+                "title": title,
+                "description": item.get("description") or f"Validate {title}",
+                "test_type": test_type,
+                "priority": item.get("priority") or "medium",
+                "preconditions": item.get("preconditions") or [],
+                "steps": steps,
+                "expected_results": expected_results,
+                "input_fields": input_fields,
+                "required_data": required_data,
+                "automation_hints": _automation_hints_from_item(item),
+                "mapping": mapping,
+                "expected_result": expected_results[0] if expected_results else "Element is visible",
+            }
+        )
+
+    target_count = max(8, len(_extract_scenario_list(scenarios)))
+    if len(normalized) < target_count:
+        fallback_cases = _build_fallback_testcases(scenarios)
+        for case in fallback_cases:
+            case_title = str(case.get("title") or "").lower()
+            if any(existing.get("title", "").lower() == case_title for existing in normalized):
+                continue
+            normalized.append(case)
+            if len(normalized) >= target_count:
+                break
+
+    if len(normalized) < target_count:
+        return _build_fallback_testcases(scenarios)
+
+    return normalized
+
+
+async def generate_testcases(scenarios: Any) -> Dict[str, Any]:
+    """Generate detailed test cases from scenarios using GroqService.
+
+    Args:
+        scenarios: The scenarios data (list or dict) produced by the scenarios generator.
+
+    Returns:
+        Dict with key "testcases": [ ... ]
+
+    Raises:
+        GroqServiceError if the LLM fails or returns unexpected output.
+    """
+    groq = GroqService()
+    try:
+        parsed = await groq.generate_testcases(scenarios)
+    except GroqServiceError:
+        return {"testcases": _build_fallback_testcases(scenarios)}
+
+    normalized = _normalize_testcases(parsed, scenarios)
+    return {"testcases": normalized}
